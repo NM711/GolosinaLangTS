@@ -1,0 +1,8 @@
+{
+  "scripts": {
+    "repl": "npx tsx ./repl.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.7"
+  }
+}
