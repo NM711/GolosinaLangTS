@@ -1,64 +1,98 @@
 import { DataType } from "../common";
 import type { SyntaxTree } from "../frontend/ast"
 
-export enum RuntimeValueType {
-  RVT_OBJ,
-  RVT_METHOD,
-  RVT_VAR
+export enum RuntimeValueID {
+  RID_OBJ,
+  RID_METHOD,
+  RID_VAR,
+  RID_MODULE
 };
 
-export namespace RuntimeEnvironmentValues {
-  export class RuntimeValue {
-    public id: RuntimeValueType;
+export enum ObjectType {
+  CLONE_OBJ,
+  DEF_OBJ,
+  VALUE_OBJ,
+  NATIVE_OBJ
+};
 
-    constructor(id: RuntimeValueType) {
-      this.id = id;
-    };
+export namespace RuntimeValues {
+
+  export abstract class Value {
+    public abstract id: RuntimeValueID; 
   };
 
-  export class RuntimeVariable extends RuntimeValue {
+  export class Variable extends Value {
+    public id: RuntimeValueID.RID_VAR;
     public isConst: boolean;
-    public holding: RuntimeObject;
+    public value: Object;
 
     constructor() {
-      super(RuntimeValueType.RVT_VAR);
+      super();
+      this.id = RuntimeValueID.RID_VAR;
     };
   };
 
-  export class RuntimeMethod extends RuntimeValue {
-    public block: SyntaxTree.BlockNode;
+  export class Method extends Value {
+    public id: RuntimeValueID.RID_METHOD;
     public params: SyntaxTree.IdentfierNode[];
+    public block: SyntaxTree.BlockNode;
 
     constructor(block: SyntaxTree.BlockNode, params: SyntaxTree.IdentfierNode[]) {
-      super(RuntimeValueType.RVT_METHOD);
+      super();
+      this.id = RuntimeValueID.RID_METHOD;
       this.block = block;
       this.params = params;
-    };
+    };   
   };
-    
-  export class RuntimeObject {
-    public methods: Map<string, RuntimeValue>
-    public prototype: RuntimeObject | null;
 
-    constructor(prototype: RuntimeObject | null = null) { 
-      this.methods = new Map();
-      this.prototype = prototype;
-    };
+  export class Module extends Value {
+    public id: RuntimeValueID.RID_MODULE;
+    public block: SyntaxTree.BlockNode;
+  
+    constructor() {
+      super();
+      this.id = RuntimeValueID.RID_MODULE;
+    };   
   };
+
+  export class Object extends Value {
+    public id: RuntimeValueID.RID_OBJ;
+    public prototype: Object | null;
+    public members: Map<string, SyntaxTree.BaseNodeAST>;
+    
+    constructor(proto: null | Object = null, members: SyntaxTree.DirectMemberNode[] = []) {
+      super();
+      this.id = RuntimeValueID.RID_OBJ;
+      this.prototype = proto;
+      this.members = new Map();
+      // just have the parser do this later on.
+
+      for (const member of members) {
+        this.members.set(member.key.name, member.value);
+      };
+    };   
+  };
+      
 };
 
 export namespace RuntimeObjects {
-  type Value = boolean | string | number | null;
+  type TypeValue = boolean | string | number | null;
 
-  export class ValueObject extends RuntimeEnvironmentValues.RuntimeObject {
-    public value: Value;
+  export class ValueObject extends RuntimeValues.Object {
+    public value: TypeValue;
     public dataType: DataType;
    
-    constructor(value: Value, type: DataType) {
+    constructor(value: TypeValue, type: DataType) {
       super();  
       this.value = value;
       this.dataType = type;
     };
+  };
+
+  export class NullObject extends ValueObject {
+    constructor() {
+      super(null, DataType.T_NULL);
+    }
   };
 
   export class BooleanObject extends ValueObject {
@@ -74,7 +108,7 @@ export namespace RuntimeObjects {
   };
 
   export class NumericObject extends ValueObject {
-    constructor(value: Value, type: DataType) {
+    constructor(value: number, type: DataType) {
       super(value, type);
     };
   };

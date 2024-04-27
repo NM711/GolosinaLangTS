@@ -1,0 +1,27 @@
+const x = clone Object {
+	y = 10,
+	hello = "Hello World"
+};
+
+# x->hello;
+
+const MyObject = clone x {
+	call = method (x) {
+		this->hello;
+	},
+	another = 3
+};
+
+const y = clone x {
+	field = 10.3,
+	object = MyObject
+};
+
+y->object->call(10);
+
+y->field = 30;
+# y->field;
+
+# y->object;
+
+# x->hello = 10;

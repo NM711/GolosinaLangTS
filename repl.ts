@@ -1,16 +1,19 @@
 import Lexer from "./src/frontend/lexer";
 import Parser from "./src/frontend/parser";
+import Walker from "./src/runtime/walker";
 import Readline from "node:readline";
 
 class Repl {
   private readline: Readline.Interface;
   private lexer: Lexer;
   private parser: Parser;
+  private walker: Walker;
   
   constructor() {
     this.lexer = new Lexer();
     this.parser = new Parser();
-    
+    this.walker = new Walker();
+      
     this.readline = Readline.createInterface({
       input: process.stdin,
       output: process.stdout
@@ -32,7 +35,11 @@ class Repl {
       this.parser.setSource = tokens;
       
       const program = this.parser.generateAST();
-      console.log(program)      
+      // console.log(program)      
+
+      this.walker.setSource = program;
+      this.walker.execute();
+      
       this.recall();
     }); 
   };

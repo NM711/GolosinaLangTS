@@ -1,5 +1,7 @@
 import Environment from "./environment";
+import ASTVisitor from "./visitor";
 import { NodeIdentifiers, type SyntaxTree } from "../frontend/ast";
+import { RuntimeEnvironmentValues, RuntimeValueType } from "./runtime_values";
 
 
 /*
@@ -7,47 +9,24 @@ import { NodeIdentifiers, type SyntaxTree } from "../frontend/ast";
   I could typecast like crazy but, Im giving the visitor pattern a try for traversing the tree.
 */
 
-class Visitor {
-  public visit() {
-  };
-};
 
 class Walker {
   private source: SyntaxTree.Program;
-  private environment: Environment;
-
+  private visitor: ASTVisitor;
+  
   constructor() {
-    this.environment = new Environment();  
+    this.visitor = new ASTVisitor();
   };
   
   public set setSource(source: SyntaxTree.Program) {
     this.source = source;
   };
 
-  public evalBinaryExpr(node: SyntaxTree.BinaryExpressionNode) {
-  
-  };
-
-  public eval(node: SyntaxTree.BaseNodeAST) {
-    switch (node.id) {
-      case NodeIdentifiers.N_VARIABLE:
-        // this.environment.declare()  
-      break;
-        
-      case NodeIdentifiers.N_METHOD:
-
-      break;
-
-      case NodeIdentifiers.N_BINARY_EXPR:
-      return this.evalBinaryExpr(node);
-        
-      case NodeIdentifiers.N_UNARY_EXPR:
-    }
-  };
-
   public execute() {
     for (const node of this.source) {
-      this.eval(node);
-    }
+      node.accept(this.visitor);
+    };
   }; 
 };
+
+export default Walker;

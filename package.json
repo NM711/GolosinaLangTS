@@ -1,6 +1,7 @@
 {
   "scripts": {
-    "repl": "npx tsx ./repl.ts"
+    "repl": "npx tsx ./repl.ts",
+    "golosina": "npx tsx ./index.ts"
   },
   "devDependencies": {
     "@types/node": "^20.12.7"

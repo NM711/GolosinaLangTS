@@ -1,81 +1,84 @@
-import { RuntimeEnvironmentValues, RuntimeValueType } from "./runtime_values";
+import { RuntimeValueID, RuntimeValues } from "./runtime_values";
 import { GolosinaEnvironmentError } from "../exceptions";
 
-
-enum ScopeIdentifier {
+export enum ScopeIdentifier {
   S_GLOBAL,
   S_OBJECT,
   S_BLOCK,
   S_METHOD,
 };
 
+export enum EnvironmentErrorState {
+  ENV_ERR_UNRESOLVED,
+  ENV_ERR_DECL_EXISTS,
+  ENV_ERR_CONST_RE_ASSIGNMENT,
+  ENV_INVALID_RESOLVER_STATE,
+};
+
 class Scope {
   public id: ScopeIdentifier;
-  public symbols: Map<string, RuntimeEnvironmentValues.RuntimeValue>;
+  public symbols: Map<string, RuntimeValues.Value>;
   
   constructor(id: ScopeIdentifier) {
     this.id = id;
+    this.symbols = new Map();
   };
 };
 
-/*
-  Runtime Environment
-  TODO:
-  1. Check for symbol shadowing
-*/
-
-
 class Environment {
   private scopes: Scope[];
-  private current: Scope;
- 
+  public current: Scope;
+  public strict: boolean;
+     
   constructor() {
     this.scopes = [new Scope(ScopeIdentifier.S_GLOBAL)];
     this.current = this.scopes[0];
+    this.strict = true;
   };
+  
+  public logScopes() {
 
-  /*
-    Method that checks wheter or not a symbol is being shadowed in an outer scope.
-  */
-
-  private checkShadow(symbol: string) {
-    for (const scope of this.scopes) {
-      if (scope.symbols.has(symbol)) {
-        throw new GolosinaEnvironmentError(`Symbol "${symbol}" has already been declared within an accessible scope!`);
-      };
+    for (let i = 0; i < this.scopes.length; ++i) {
+      console.log("Scope #%d", i + 1);
+      console.log(this.scopes[i]);
     };
+    
   };
 
-  public get getCurrentScopeID() {
-    return this.current.id;
+ 
+  private updateCurrent(): void {
+    this.current = this.scopes[this.scopes.length - 1];
   };
 
   public pushScope(id: ScopeIdentifier) {
     this.scopes.push(new Scope(id));
-    this.current = this.scopes[this.scopes.length - 1];
+    this.updateCurrent();
   };
 
   public popScope() {
-    this.current = this.scopes.pop() as Scope;
+    this.scopes.pop();
+    this.updateCurrent();
   };
 
-  public declare(symbol: string, value: RuntimeEnvironmentValues.RuntimeValue) {
-    this.checkShadow(symbol);
+  public declare(symbol: string, value: RuntimeValues.Value) {
+    if (this.current.symbols.has(symbol)) {
+      throw new GolosinaEnvironmentError(`Symbol "${symbol}" has already been declared within the current scope!`, EnvironmentErrorState.ENV_ERR_DECL_EXISTS);
+    };
+    
     this.current.symbols.set(symbol, value);
   };
 
-  public assign(symbol: string, value: RuntimeEnvironmentValues.RuntimeValue) {
-    let resolved: RuntimeEnvironmentValues.RuntimeValue = this.resolve(symbol);
+  public assign(symbol: string, value: RuntimeValues.Value) {
+    let resolved = this.resolve(symbol);
     // under the hood a pointer to the resolved object is returned, so essentially we can modify what we need.
-
-    if (resolved.id === RuntimeValueType.RVT_VAR) {
-      const variable = resolved as RuntimeEnvironmentValues.RuntimeVariable;
-
+    if (resolved.id === RuntimeValueID.RID_VAR) { 
+      const variable = resolved as RuntimeValues.Variable;
+      
       if (variable.isConst) {
-        throw new GolosinaEnvironmentError(`Attempted to re-assign constant at "${symbol}"`);
+        throw new GolosinaEnvironmentError(`Attempted to re-assign constant at "${symbol}"`, EnvironmentErrorState.ENV_ERR_CONST_RE_ASSIGNMENT);
       };
     };
-
+    
     resolved = value;
 
     // verification stage
@@ -84,20 +87,29 @@ class Environment {
       if (x.symbols.has(symbol)) {
         console.log(x.symbols.get(symbol))
         console.log(resolved)
-      }
-    }
+      };
+    };
   };
 
-  public resolve(symbol: string): RuntimeEnvironmentValues.RuntimeValue {
-    for (const scope of this.scopes) {
+  public resolve(symbol: string): RuntimeValues.Value {
+
+    const currentId = this.current.id
+    
+    for (let i = this.scopes.length - 1; i >= 0; --i) {
+      const scope = this.scopes[i];
+      
+      if (this.strict && scope.id === ScopeIdentifier.S_GLOBAL && currentId === ScopeIdentifier.S_OBJECT) {
+        break;
+      };
+
+      
       if (scope.symbols.has(symbol)) {
-        return scope.symbols.get(symbol) as RuntimeEnvironmentValues.RuntimeValue;
+        return scope.symbols.get(symbol) as RuntimeValues.Value;
       };
     };
 
-    throw new GolosinaEnvironmentError(`Unable to resolve symbol "${symbol}"!`);
-  };
-   
+    throw new GolosinaEnvironmentError(` Unable to resolve symbol at "${symbol}"`, EnvironmentErrorState.ENV_ERR_UNRESOLVED);
+  };  
 };
 
 export default Environment;

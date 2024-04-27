@@ -1,5 +1,5 @@
 import { GolosinaSyntaxError } from "../exceptions";
-import { LinePosition, Token, TokenIdentifiers } from "./token.types";
+import { LinePosition, Token, TokenIdentifiers } from "../types/token.types";
 
 class Lexer {
   private table: Map<string, TokenIdentifiers>;

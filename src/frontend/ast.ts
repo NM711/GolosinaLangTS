@@ -1,14 +1,14 @@
 import { DataType } from "../common";
 import { LinePosition } from "./token.types";
 import TreeVisitor from "../runtime/visitor"
-import { RuntimeEnvironmentValues } from "../runtime/runtime_values";
 
 export enum NodeIdentifiers {
   N_BINARY_EXPR,
+  N_BINARY_ASSIGN_EXPR,
   N_UNARY_EXPR,
   N_EXPR_CALL,
   N_MEMBER_EXPR,
-  N_MEMBER,
+  N_DIRECT_MEMBER,
   N_IF_STMNT,
   N_FOR_STMNT,
   N_WHILE_STMNT,
@@ -22,12 +22,15 @@ export enum NodeIdentifiers {
   N_METHOD,
   N_VARIABLE,
   N_DATA_TYPE,
+  N_OBJECT_EXPR,
   N_BLOCK,
+  N_ACCESSING,
   N_EXPR_CLONE,
 };
 
 export namespace SyntaxTree {
-  export class BaseNodeAST<T = RuntimeEnvironmentValues.RuntimeValue> {
+  
+  export abstract class BaseNodeAST {
     public id: NodeIdentifiers;
     public kind: string;
     public info: LinePosition;
@@ -40,7 +43,7 @@ export namespace SyntaxTree {
 
     // declare an interface
 
-    public accept(visitor: TreeVisitor): T {}
+    public abstract accept(visitor: TreeVisitor): void;
   };
 
   export class BinaryExpressionNode extends BaseNodeAST {
@@ -66,13 +69,33 @@ export namespace SyntaxTree {
       super(NodeIdentifiers.N_UNARY_EXPR, "UnaryExpression", info);
       this.isPrefix = false;
     };
+        
+    public accept(visitor: TreeVisitor): void {
+      visitor.visitUnaryExpr(this);
+    };
+
   };
+  
+  export class AssignmentExpressionNode extends BaseNodeAST {
+    public lhs: IdentfierNode | MemberExpressionNode;
+    public op: string;
+    public rhs: BaseNodeAST;
+
+    constructor(info: LinePosition) {
+      super(NodeIdentifiers.N_BINARY_ASSIGN_EXPR, "AssignmentExpression", info);
+    };
+
+    public accept(visitor: TreeVisitor): void {
+      visitor.visitAssignmentExpr(this);
+    };
+  };
+
 
   export class LiteralNode extends BaseNodeAST {
     public value: string;
-    public type: DataTypeNode;
+    public type: DataType;
 
-    constructor(value: string, type: DataTypeNode, info: LinePosition) {
+    constructor(value: string, type: DataType, info: LinePosition) {
       super(NodeIdentifiers.N_LITERAL, "Literal", info);
       this.value = value;
       this.type = type;
@@ -96,17 +119,6 @@ export namespace SyntaxTree {
     };
   };
 
-  export class DataTypeNode extends BaseNodeAST {
-    public typeId: DataType;
-    public name: string;
-
-    constructor(typeId: DataType, name: string, info: LinePosition) {
-      super(NodeIdentifiers.N_DATA_TYPE, "DataType", info);
-      this.typeId = typeId;
-      this.name = name;
-    };
-  };
-
   export class VariableNode extends BaseNodeAST {
     public isConst: boolean;
     public ident: IdentfierNode;
@@ -117,6 +129,11 @@ export namespace SyntaxTree {
       this.isConst = false;
       this.init = null;
     };
+
+    
+    public accept(visitor: TreeVisitor): void {
+      visitor.visitVar(this);
+    };
   };
 
   export class BlockNode extends BaseNodeAST {
@@ -125,6 +142,10 @@ export namespace SyntaxTree {
     constructor(info: LinePosition) {
       super(NodeIdentifiers.N_BLOCK, "Block", info);
       this.body = [];
+    };
+
+    public accept(visitor: TreeVisitor): void {
+      visitor.visitBlockStmnt(this);    
     };
   };
 
@@ -136,10 +157,13 @@ export namespace SyntaxTree {
     constructor(info: LinePosition) {
       super(NodeIdentifiers.N_IF_STMNT, "IfStmnt", info);
     };
+
+    public accept(visitor: TreeVisitor): void {
+      visitor.visitIfStmnt(this);    
+    };
   };
 
   export class MethodNode extends BaseNodeAST {
-    public ident: IdentfierNode;
     public params: IdentfierNode[];
     public block: BlockNode;
 
@@ -147,23 +171,36 @@ export namespace SyntaxTree {
       super(NodeIdentifiers.N_METHOD, "Method", info);
       this.params = [];
     };
+
+    public accept(visitor: TreeVisitor): void {
+      visitor.visitMethod(this); 
+    };
   };
 
   export class MemberExpressionNode extends BaseNodeAST {
-    public parent: BaseNodeAST;
-    public accessing: BaseNodeAST;
+    public parent: IdentfierNode | MemberExpressionNode;
+    public accessing: IdentfierNode;
 
     constructor(info: LinePosition) {
       super(NodeIdentifiers.N_MEMBER_EXPR, "MemberExpression", info);
+    };
+
+    
+    public accept(visitor: TreeVisitor): void {
+      visitor.visitMemberExpr(this); 
     };
   };
 
   export class ExpressionCallNode extends BaseNodeAST {
     public arguments: (LiteralNode | IdentfierNode)[];
-    public callee: IdentfierNode;
+    public callee: IdentfierNode | MemberExpressionNode;
     constructor(info: LinePosition) {
       super(NodeIdentifiers.N_EXPR_CALL, "ExpressionCall", info);
       this.arguments = [];
+    };
+
+    public accept(visitor: TreeVisitor): void {
+       visitor.visitCallExpr(this); 
     };
   };
 
@@ -173,13 +210,45 @@ export namespace SyntaxTree {
       super(NodeIdentifiers.N_RETURN_STMNT, "Return", info);
       this.value = value;
     };
+
+    public accept(visitor: TreeVisitor): void {
+      visitor.visitReturnStmnt(this);
+    };
+  };
+
+  export class DirectMemberNode extends BaseNodeAST {
+    public key: IdentfierNode;
+    public value: BaseNodeAST;
+    
+    constructor(info: LinePosition) {
+      super(NodeIdentifiers.N_DIRECT_MEMBER, "DirectMember", info);
+    };
+
+    public accept(): void {};
+  };
+
+
+  export class ObjectExpressionNode extends BaseNodeAST {
+    public members: DirectMemberNode[]; 
+    
+    constructor(info: LinePosition) {
+      super(NodeIdentifiers.N_OBJECT_EXPR, "ObjectExpression", info);
+      this.members = [];
+    };
+
+    public accept(): void {};
   };
 
   export class CloneExpressionNode extends BaseNodeAST {
     public cloning: IdentfierNode;
+    public object: ObjectExpressionNode;
 
     constructor(info: LinePosition) {
       super(NodeIdentifiers.N_EXPR_CLONE, "CloneExpression", info);
+    };
+
+    public accept(visitor: TreeVisitor): void {
+      visitor.visitCloneExpr(this); 
     };
   };
 
