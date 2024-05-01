@@ -1,14 +1,14 @@
 import { DataType } from "../common";
-import { LinePosition } from "./token.types";
-import TreeVisitor from "../runtime/visitor"
+import { LinePosition } from "../types/token.types";
+import TreeVisitor from "../types/visitor.types"
 
 export enum NodeIdentifiers {
   N_BINARY_EXPR,
   N_BINARY_ASSIGN_EXPR,
   N_UNARY_EXPR,
+  N_DIRECT_MEMBER,
   N_EXPR_CALL,
   N_MEMBER_EXPR,
-  N_DIRECT_MEMBER,
   N_IF_STMNT,
   N_FOR_STMNT,
   N_WHILE_STMNT,
@@ -61,7 +61,7 @@ export namespace SyntaxTree {
   };
 
   export class UnaryExpressionNode extends BaseNodeAST {
-    public lhs: IdentfierNode;
+    public argument: BaseNodeAST;
     public op: string;
     public isPrefix: boolean;
 
@@ -192,7 +192,7 @@ export namespace SyntaxTree {
   };
 
   export class ExpressionCallNode extends BaseNodeAST {
-    public arguments: (LiteralNode | IdentfierNode)[];
+    public arguments: (LiteralNode | IdentfierNode | MemberExpressionNode)[];
     public callee: IdentfierNode | MemberExpressionNode;
     constructor(info: LinePosition) {
       super(NodeIdentifiers.N_EXPR_CALL, "ExpressionCall", info);
@@ -204,9 +204,17 @@ export namespace SyntaxTree {
     };
   };
 
+  export class BreakNode extends BaseNodeAST {
+    constructor(info: LinePosition) {
+      super(NodeIdentifiers.N_BREAK_STMTN, "Break", info);
+    };
+
+    public accept(): void {};
+  };
+
   export class ReturnNode extends BaseNodeAST {
-    public value: (IdentfierNode | LiteralNode);
-    constructor(info: LinePosition, value: (SyntaxTree.IdentfierNode | SyntaxTree.LiteralNode)) {
+    public value: BaseNodeAST;
+    constructor(info: LinePosition, value: BaseNodeAST) {
       super(NodeIdentifiers.N_RETURN_STMNT, "Return", info);
       this.value = value;
     };
@@ -219,24 +227,23 @@ export namespace SyntaxTree {
   export class DirectMemberNode extends BaseNodeAST {
     public key: IdentfierNode;
     public value: BaseNodeAST;
-    
+
     constructor(info: LinePosition) {
       super(NodeIdentifiers.N_DIRECT_MEMBER, "DirectMember", info);
     };
 
     public accept(): void {};
   };
-
-
+  
   export class ObjectExpressionNode extends BaseNodeAST {
-    public members: DirectMemberNode[]; 
+    public members: DirectMemberNode[];
     
     constructor(info: LinePosition) {
       super(NodeIdentifiers.N_OBJECT_EXPR, "ObjectExpression", info);
       this.members = [];
     };
 
-    public accept(): void {};
+    public accept(): void{};
   };
 
   export class CloneExpressionNode extends BaseNodeAST {

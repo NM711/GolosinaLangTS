@@ -36,16 +36,6 @@ class Environment {
     this.strict = true;
   };
   
-  public logScopes() {
-
-    for (let i = 0; i < this.scopes.length; ++i) {
-      console.log("Scope #%d", i + 1);
-      console.log(this.scopes[i]);
-    };
-    
-  };
-
- 
   private updateCurrent(): void {
     this.current = this.scopes[this.scopes.length - 1];
   };
@@ -69,46 +59,39 @@ class Environment {
   };
 
   public assign(symbol: string, value: RuntimeValues.Value) {
-    let resolved = this.resolve(symbol);
-    // under the hood a pointer to the resolved object is returned, so essentially we can modify what we need.
-    if (resolved.id === RuntimeValueID.RID_VAR) { 
-      const variable = resolved as RuntimeValues.Variable;
+    for (let i = this.scopes.length - 1; i >= 0; --i) {
+      const scope = this.scopes[i];
       
-      if (variable.isConst) {
-        throw new GolosinaEnvironmentError(`Attempted to re-assign constant at "${symbol}"`, EnvironmentErrorState.ENV_ERR_CONST_RE_ASSIGNMENT);
+      if (scope.symbols.has(symbol)) {
+        const resolved = scope.symbols.get(symbol) as RuntimeValues.Value;
+      
+        if (resolved.id === RuntimeValueID.RID_VAR) { 
+          const variable = resolved as RuntimeValues.Variable;
+      
+          if (variable.isConst) {
+            throw new GolosinaEnvironmentError(`Attempted to re-assign constant at "${symbol}"`, EnvironmentErrorState.ENV_ERR_CONST_RE_ASSIGNMENT);
+          };
+        };
+
+        scope.symbols.set(symbol, value);
+        return;        
       };
     };
-    
-    resolved = value;
 
-    // verification stage
-
-    for (const x of this.scopes) {
-      if (x.symbols.has(symbol)) {
-        console.log(x.symbols.get(symbol))
-        console.log(resolved)
-      };
-    };
+    throw new GolosinaEnvironmentError(` Unable to resolve symbol at "${symbol}"`, EnvironmentErrorState.ENV_ERR_UNRESOLVED);
   };
 
   public resolve(symbol: string): RuntimeValues.Value {
 
-    const currentId = this.current.id
-    
     for (let i = this.scopes.length - 1; i >= 0; --i) {
       const scope = this.scopes[i];
-      
-      if (this.strict && scope.id === ScopeIdentifier.S_GLOBAL && currentId === ScopeIdentifier.S_OBJECT) {
-        break;
-      };
-
       
       if (scope.symbols.has(symbol)) {
         return scope.symbols.get(symbol) as RuntimeValues.Value;
       };
     };
 
-    throw new GolosinaEnvironmentError(` Unable to resolve symbol at "${symbol}"`, EnvironmentErrorState.ENV_ERR_UNRESOLVED);
+    throw new GolosinaEnvironmentError(`Unable to resolve symbol at "${symbol}"`, EnvironmentErrorState.ENV_ERR_UNRESOLVED);
   };  
 };
 

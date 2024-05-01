@@ -1,30 +1,89 @@
-import Environment  from "./environment";
+import Environment from "./environment";
 import GolosinaTypeChecker from "./typechecker";
+import AbstractVisitor from "../types/visitor.types";
+import NativeObjects from "./native/native_objects"
 import { DataType } from "../common";
-import { NodeIdentifiers, SyntaxTree } from "../frontend/ast";
-import { RuntimeValues, RuntimeObjects, RuntimeValueID } from "../runtime/runtime_values"
+import { SyntaxTree } from "../frontend/ast";
+import { RuntimeValues, RuntimeObjects, ParamState } from "../runtime/runtime_values"
 import { ScopeIdentifier } from "./environment";
-import type { IVisitor } from "../types/visitor.types";
-import { GolosinaEnvironmentError } from "../exceptions";
+import { GolosinaTypeError } from "../exceptions";
 
 class MetaData {
   public assign: boolean;
-  public symbol: string;
+  private symbol: string;
+  private collection: boolean;
 
   constructor() {
     this.assign = false;
+    this.collection = true;
+  };
+
+  public set setSymbolCollection(active: boolean) {
+    this.collection = active;
+  };
+
+  public set setSymbol(newSymbol: string) {
+    if (this.collection) {
+      this.symbol = newSymbol;
+    };
+  };
+
+  public get getSymbol() {
+    return this.symbol;
+  };
+};
+
+class Handler {
+  private stack: RuntimeValues.Value[];
+  private tc: GolosinaTypeChecker;
+  private meta: MetaData;
+  
+  constructor(stack: RuntimeValues.Value[], tc: GolosinaTypeChecker, meta: MetaData) {
+    this.stack = stack;
+    this.tc = tc;
+    this.meta = meta;
+  };
+
+  public nativeMethodCall(node: SyntaxTree.ExpressionCallNode, nativeM) {
+    if (nativeMethod.paramState === ParamState.FIXED) {
+      this.tc.checkArgLengthMatch({
+        info: node.callee.info,
+        ident: this.meta.getSymbol,
+        paramsLength: nativeMethod.exec.length,
+        argsLength: node.arguments.length, 
+      });
+    };
+
+    const values: RuntimeObjects.TypeValue[] = []
+
+    for (const arg of node.arguments) {
+      arg.accept(this);
+
+      const value = this.stack.pop() as RuntimeObjects.ValueObject;
+
+      // run a typecheck here make sure the values are of value objects.
+
+      values.push(value.value);
+    };
+
+    nativeMethod.exec(values);
+  };
+
+  public methodCall() {
+    
   };
    
 };
 
-class ASTVisitor implements IVisitor {
+class ASTVisitor extends AbstractVisitor {
   private tc: GolosinaTypeChecker;
   private environment: Environment;
   private stack: RuntimeValues.Value[];
   private context: RuntimeValues.Object | null;
   private meta: MetaData;
-   
+
   constructor() {
+    super();
     this.tc = new GolosinaTypeChecker();
     this.environment = new Environment();
     this.meta = new MetaData();
@@ -34,100 +93,252 @@ class ASTVisitor implements IVisitor {
   };
 
   private initNative() {
+    const native = new NativeObjects();
+
+    this.environment.declare("fmt", native.getFmt);
     this.environment.declare("Object", new RuntimeValues.Object());
   };
 
-  private prototypeLookup(accessing: SyntaxTree.IdentfierNode, prototype: RuntimeValues.Object | null) {
+  public override visitBinaryExpr(node: SyntaxTree.BinaryExpressionNode) {
+    node.lhs.accept(this);
+    node.rhs.accept(this);
 
-    /*
-      Group all members within a single accessible scope, if a member has already been declared in a prototype or something just re assign it
-      with the new value.
-    */
+    const right = this.stack.pop() as RuntimeValues.Value;
 
-    const accSymbol = accessing.name;
+    const left = this.stack.pop() as RuntimeValues.Value;
 
-    while (true) {
-      try {
-        accessing.accept(this);
-        break;
-      } catch (e) {
+    this.tc.checkBinaryArithmetic(node.op,
+      {
+        info: node.lhs.info,
+        value: left,
+      },
+      {
+        info: node.rhs.info,
+        value: right
+      });
 
-        if (e instanceof GolosinaEnvironmentError) {
-          if (prototype === null) {
-            throw e;
+    // both will 100% be valid object values but i still need ts to infer so.
+
+    if (this.tc.guards.isObjectValue(left) && this.tc.guards.isObjectValue(right)) {
+      // Refactor later once complete
+      switch (node.op) {
+        case "+": {
+          if (left.isString() && right.isString()) {
+            this.stack.push(new RuntimeObjects.StringObject(left.value + right.value));
+          } else if ((left.isFloat() && right.isInt()) || (left.isInt() && right.isFloat())) {
+            this.stack.push(new RuntimeObjects.FloatObject(left.value + right.value));
+          } else if (left.isInt() && right.isInt()) {
+            this.stack.push(new RuntimeObjects.IntegerObject(left.value + right.value));
           };
 
-          if (prototype.members.has(accSymbol)) {
-            const member = prototype.members.get(accSymbol) as SyntaxTree.BaseNodeAST;
+          break;
+        };
 
-            // kind of a hacky way to access the global scope, i only care about that when im doing member expression
-            // but in this case we are assigning a value to a member which is different.
-
-            this.environment.strict = false;
-            
-            member.accept(this);
-
-            this.environment.strict = true;
-            const value = this.stack.pop() as RuntimeValues.Value;
-            this.environment.declare(accSymbol, value);
+        case "-": {
+          if ((left.isFloat() && right.isInt()) || (left.isInt() && right.isFloat())) {
+            this.stack.push(new RuntimeObjects.FloatObject(left.value - right.value));
+          } else if (left.isInt() && right.isInt()) {
+            this.stack.push(new RuntimeObjects.IntegerObject(left.value - right.value));
           };
-      
-          prototype = prototype.prototype;
-          // console.log(e.message, this.environment)
-          
-        } else {
-          throw e;
+
+          break;
+        };
+
+        case "*": {
+          if ((left.isFloat() && right.isInt()) || (left.isInt() && right.isFloat())) {
+            this.stack.push(new RuntimeObjects.FloatObject(left.value * right.value));
+          } else if (left.isInt() && right.isInt()) {
+            this.stack.push(new RuntimeObjects.IntegerObject(left.value * right.value));
+          };
+
+          break;
+        };
+        case "/": {
+          if ((left.isFloat() && right.isInt()) || (left.isInt() && right.isFloat())) {
+            this.stack.push(new RuntimeObjects.FloatObject(left.value / right.value));
+          } else if (left.isInt() && right.isInt()) {
+            this.stack.push(new RuntimeObjects.IntegerObject(left.value / right.value));
+          };
+
+          break;
+        };
+        case "%": {
+          if ((left.isFloat() && right.isInt()) || (left.isInt() && right.isFloat())) {
+            this.stack.push(new RuntimeObjects.FloatObject(left.value % right.value));
+          } else if (left.isInt() && right.isInt()) {
+            this.stack.push(new RuntimeObjects.IntegerObject(left.value % right.value));
+          };
+
+          break;
+        };
+
+        case "==": {
+          this.stack.push(new RuntimeObjects.BooleanObject(left.value === right.value));
+          break;
+        };
+
+        case "!=": {
+          this.stack.push(new RuntimeObjects.BooleanObject(left.value !== right.value));
+          break;
+        };
+
+        case ">": {
+          if (left.value && right.value) {
+            this.stack.push(new RuntimeObjects.BooleanObject(left.value > right.value));
+          };
+          break;
+        };
+
+        case "<": {
+          if (left.value && right.value) {
+            this.stack.push(new RuntimeObjects.BooleanObject(left.value < right.value));
+          };
+
+          break;
+
+        };
+
+        case ">=": {
+          if (left.value && right.value) {
+            this.stack.push(new RuntimeObjects.BooleanObject(left.value >= right.value));
+          };
+
+          break;
+        };
+
+        case "<=": {
+          if (left.value && right.value) {
+            this.stack.push(new RuntimeObjects.BooleanObject(left.value <= right.value));
+          };
+
+          break;
+        };
+
+        case "&&": {
+          if (left.value && right.value) {
+            this.stack.push(new RuntimeObjects.BooleanObject(Boolean(left.value && right.value)));
+          };
+
+          break;
+
+        };
+
+        case "||": {
+          if (left.value && right.value) {
+            this.stack.push(new RuntimeObjects.BooleanObject(Boolean(left.value || right.value)));
+          };
+
+          break;
+
         };
       };
     };
   };
 
-  public visitBinaryExpr(node: SyntaxTree.BinaryExpressionNode) {
+  private handlePrefixUnaryExpr(node: SyntaxTree.UnaryExpressionNode, inMember: boolean) {
+      if (node.isPrefix && this.context) {
+        const objectValue = this.stack.pop() as RuntimeObjects.ValueObject;
+        
+        const params = {
+          info: node.info,
+          ident: this.meta.getSymbol,
+          value: objectValue
+        };
+
+        switch (node.op) {
+          case "++": {
+            const numeric = this.tc.checkUnaryExpr(params, "pre-increment");
+            const preIncrement = new RuntimeObjects.IntegerObject(numeric.value + 1);
+            this.stack.push(preIncrement);
+
+            if (inMember) {
+              this.context.setMember(this.meta.getSymbol, preIncrement);
+            } else {
+              this.environment.assign(this.meta.getSymbol, preIncrement)
+            };
+          
+            break;
+          };
+
+          case "--": {
+            const numeric = this.tc.checkUnaryExpr(params, "pre-decrement");
+            const preDecrement = new RuntimeObjects.IntegerObject(numeric.value - 1);
+            this.stack.push(preDecrement);
+
+            if (inMember) {
+              this.context.setMember(this.meta.getSymbol, preDecrement);
+            } else {
+              this.environment.assign(this.meta.getSymbol, preDecrement)
+            };
+            
+            break;
+          };
+
+          case "!": {
+            const not = new RuntimeObjects.BooleanObject(!objectValue.value);
+            this.stack.push(not);
+            break;
+          };
+        };
+      };    
   };
 
-  public visitUnaryExpr(node: SyntaxTree.UnaryExpressionNode) {
-
-  };
-
-  public visitAssignmentExpr(node: SyntaxTree.AssignmentExpressionNode) {
+  private handlePostfixUnaryExpr() {
     
+  };
+
+  public override visitUnaryExpr(node: SyntaxTree.UnaryExpressionNode) {
+
     /*
-      1. We eval the rhs first, this way we have something to pop out.
-      2. We accept the lhs but before doing so we set the runtime state to ASSIGN, this way if an ident is called, instead of resolving,
-         we assign the popped rhs to it and end the ident visit.
-    
-      3. When a value is found in the prototype chain, assignment occurs if the lhs is that of member expression.
-      4. When runtime variable value is found in ident specifically, assignment occurs cos the lhs is that of ident.
+      Prefix adds directly to the storage location and then resolved
+      Postfix resolves then adds to the in memory storage.
     */
-  
-    node.rhs.accept(this);
 
-    const value = this.stack.pop() as RuntimeValues.Value;
+    console.log(node.argument)
+    node.argument.accept(this);
 
-    // tc validate value.
+    let memberMode: boolean;
 
-    this.meta.assign = true;
+    if (this.tc.guards.isMemberExpr(node.argument)) {
+      memberMode = true;
+    } else {
+      memberMode = false;
+    };
+    
+    this.handlePrefixUnaryExpr(node, memberMode);
 
-    node.lhs.accept(this);
-
-    this.meta.assign = false;
-  
-    this.environment.assign(this.meta.symbol, value);
   };
 
-  public visitMemberExpr(node: SyntaxTree.MemberExpressionNode) {
+  public override visitAssignmentExpr(node: SyntaxTree.AssignmentExpressionNode) {
+    if (this.tc.guards.isMemberExpr(node.lhs)) {
+      node.lhs.accept(this);
+
+      node.rhs.accept(this);
+
+      const value = this.stack.pop() as RuntimeValues.Value;
+      
+      if (this.context) {
+        this.context.setMember(this.meta.getSymbol, value);
+      };
+
+    } else {
+      node.rhs.accept(this);
+      const value = this.stack.pop() as RuntimeValues.Value;
+      this.environment.assign(node.lhs.name, value);
+    };
+  };
+
+  public override visitMemberExpr(node: SyntaxTree.MemberExpressionNode) {
     node.parent.accept(this);
-    
+
     const parent = this.stack.pop() as RuntimeValues.Object | RuntimeValues.Variable;
-    
+
     this.tc.checkObject({
       ident: null,
       info: node.info,
       message: `Attempted to perform member expression on a parent that is not a valid object or a valid reference to an object value!`,
       value: parent
     });
-
-    this.environment.pushScope(ScopeIdentifier.S_OBJECT);
 
     let prototype: RuntimeValues.Object;
 
@@ -137,16 +348,16 @@ class ASTVisitor implements IVisitor {
       prototype = parent;
     };
 
-    
     this.context = prototype;
-    
-    this.prototypeLookup(node.accessing, prototype);
-    
-    this.environment.popScope();
+    this.meta.setSymbol = node.accessing.name;
+
+    const retrieved = prototype.getMember(node.accessing.name);
+    this.stack.push(retrieved);
   };
 
-  public visitCloneExpr(node: SyntaxTree.CloneExpressionNode) {
-    const resolvedPrototype = this.environment.resolve(node.cloning.name);
+  public override visitCloneExpr(node: SyntaxTree.CloneExpressionNode) {
+    node.cloning.accept(this);
+    const resolvedPrototype = this.stack.pop() as RuntimeValues.Value;
 
     const ref = this.tc.checkObject({
       ident: node.cloning.name,
@@ -158,37 +369,64 @@ class ASTVisitor implements IVisitor {
     let instantiated: RuntimeValues.Object;
 
     if (this.tc.guards.isVariable(ref)) {
-      instantiated = new RuntimeValues.Object(ref.value, node.object.members);
+      instantiated = new RuntimeValues.Object(ref.value);
     } else {
-      instantiated = new RuntimeValues.Object(ref, node.object.members);
+      instantiated = new RuntimeValues.Object(ref);
+    };
+
+    for (const member of node.object.members) {
+      member.value.accept(this);
+      const value = this.stack.pop() as RuntimeValues.Value;
+      instantiated.members.set(member.key.name, value);
     };
 
     this.stack.push(instantiated);
   };
 
-  public visitCallExpr(node: SyntaxTree.ExpressionCallNode) {
-    node.callee.accept(this);
+  private handleNativeMethodCall(node: SyntaxTree.ExpressionCallNode, nativeMethod: RuntimeValues.MethodNative) {
+    if (nativeMethod.paramState === ParamState.FIXED) {
+      this.tc.checkArgLengthMatch({
+        info: node.callee.info,
+        ident: this.meta.getSymbol,
+        paramsLength: nativeMethod.exec.length,
+        argsLength: node.arguments.length, 
+      });
+    };
 
-    const value = this.stack.pop() as RuntimeValues.Value;
-    
-    const method = this.tc.checkMethod({
-      ident: this.meta.symbol,
-      info: node.info,
-      value: value
+    const values: RuntimeObjects.TypeValue[] = []
+
+    for (const arg of node.arguments) {
+      arg.accept(this);
+
+      const value = this.stack.pop() as RuntimeObjects.ValueObject;
+
+      // run a typecheck here make sure the values are of value objects.
+
+      values.push(value.value);
+    };
+
+    nativeMethod.exec(values);
+  };
+
+  private handleMethodCall(node: SyntaxTree.ExpressionCallNode, method: RuntimeValues.Method) {
+    this.tc.checkArgLengthMatch({
+      info: node.callee.info,
+      ident: this.meta.getSymbol,
+      paramsLength: method.params.length,
+      argsLength: node.arguments.length  
     });
-
-
-    this.tc.checkArgLengthMatch(node, method.params.length);
-
+    
     this.environment.pushScope(ScopeIdentifier.S_METHOD);
     // inject ref to current object
 
     if (this.context) {
       this.environment.declare("this", this.context);
     };
-    
-    for (const param of method.params) {
-      param.accept(this);
+
+    for (let i = 0; i < method.params.length; ++i) {
+      const arg = node.arguments[i];
+      const param = method.params[i];
+      arg.accept(this);
       const value = this.stack.pop() as RuntimeValues.Value;
       this.environment.declare(param.name, value);
     };
@@ -198,8 +436,28 @@ class ASTVisitor implements IVisitor {
     this.environment.popScope();
   };
 
-  public visitLiteral(node: SyntaxTree.LiteralNode) {
-      switch (node.type) {
+  public override visitCallExpr(node: SyntaxTree.ExpressionCallNode) {
+    node.callee.accept(this);
+
+    const value = this.stack.pop() as RuntimeValues.Value;
+
+    const method = this.tc.checkMethod({
+      ident: this.meta.getSymbol,
+      info: node.info,
+      value: value
+    });
+
+    if (this.tc.guards.isMethod(method)) {
+      this.handleMethodCall(node, method);
+
+    } else {
+      this.handleNativeMethodCall(node, method);
+    };
+
+  };
+
+  public override visitLiteral(node: SyntaxTree.LiteralNode) {
+    switch (node.type) {
       case DataType.T_BOOLEAN:
         (node.value === "true") ? this.stack.push(new RuntimeObjects.BooleanObject(true)) : this.stack.push(new RuntimeObjects.BooleanObject(false));
         break;
@@ -222,31 +480,21 @@ class ASTVisitor implements IVisitor {
     };
   };
 
-  public visitIdent(node: SyntaxTree.IdentfierNode) {    
-    this.meta.symbol = node.name;
+  public override visitIdent(node: SyntaxTree.IdentfierNode) {
+    this.meta.setSymbol = node.name;
 
-    if (this.meta.assign) {
-      /*
-        The idea here is that if assign is set, then we are telling the resolver to not resolve and push something to the stack.
-        This is because we will handle the saved symbol ourselves.
-      */
-      
-      return;    
-    };
-    
     const resolved = this.environment.resolve(node.name);
-  
     if (this.tc.guards.isVariable(resolved)) {
-      this.stack.push(resolved.value);      
+      this.stack.push(resolved.value);
     } else {
       this.stack.push(resolved);
     };
 
   };
 
-  public visitVar(node: SyntaxTree.VariableNode) {
+  public override visitVar(node: SyntaxTree.VariableNode) {
     let init: RuntimeValues.Object = new RuntimeObjects.NullObject();
-    
+
     if (node.init) {
       node.init.accept(this);
       init = this.stack.pop() as RuntimeValues.Object;
@@ -256,26 +504,33 @@ class ASTVisitor implements IVisitor {
     runtimeVariable.isConst = node.isConst;
     runtimeVariable.value = init;
 
-    
+
     this.environment.declare(node.ident.name, runtimeVariable);
   };
 
-  public visitMethod(node: SyntaxTree.MethodNode) {
+  public override visitMethod(node: SyntaxTree.MethodNode) {
     const method = new RuntimeValues.Method(node.block, node.params);
     this.stack.push(method);
   };
-  
-  public visitIfStmnt(node: SyntaxTree.IfStmntNode) {
 
+  public override visitIfStmnt(node: SyntaxTree.IfStmntNode) {
+    node.expression.accept(this);
+    const exprValue = this.stack.pop() as RuntimeObjects.ValueObject;
+
+    if (exprValue && exprValue.value) {
+      node.block.accept(this);
+    } else if (node.alternate) {
+      node.alternate.accept(this);
+    };
   };
 
-  public visitReturnStmnt(node: SyntaxTree.ReturnNode) {
-
+  public override visitReturnStmnt(node: SyntaxTree.ReturnNode) {
+    node.value.accept(this);
   };
-  
-  public visitBlockStmnt(node: SyntaxTree.BlockNode) {
+
+  public override visitBlockStmnt(node: SyntaxTree.BlockNode) {
     this.environment.pushScope(ScopeIdentifier.S_BLOCK);
-    
+
     for (const stmnt of node.body) {
       stmnt.accept(this);
     };

@@ -1,0 +1,15 @@
+# Expression Examples
+
+const x = clone Object {
+	number = 10,
+	another = "Hello"
+};
+
+
+++x->number;
+
+x->number = --x->number;
+
+# x->number = x->number++ ;
+
+fmt->log(x->number);

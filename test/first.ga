@@ -1,0 +1,28 @@
+const UserFactory = clone Object {
+	create = method (userAge, userName) {
+		return clone Object {
+			name = userName,
+			age = userAge
+		};	
+	}
+};
+
+const AgeProcessor = clone Object {
+	process = method (age, name) {
+		if (age < 50) {
+			fmt->log("User", name, "is not in midlife!");
+		} else if (age >= 50 && age <= 60) {
+			fmt->log("User", name, "is in his midlife!");
+		} else {
+			fmt->log("User", name, "is above the midlife years!");
+		};
+	}
+};
+
+const UserA = UserFactory->create(25, "Bobby");
+const UserB = UserFactory->create(80, "James");
+const UserC = UserFactory->create(53, "Timmy");
+
+AgeProcessor->process(UserA->age, UserA->name);
+AgeProcessor->process(UserB->age, UserB->name);
+AgeProcessor->process(UserC->age, UserC->name);

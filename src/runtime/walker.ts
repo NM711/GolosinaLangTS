@@ -1,7 +1,5 @@
-import Environment from "./environment";
 import ASTVisitor from "./visitor";
-import { NodeIdentifiers, type SyntaxTree } from "../frontend/ast";
-import { RuntimeEnvironmentValues, RuntimeValueType } from "./runtime_values";
+import type { SyntaxTree } from "../frontend/ast";
 
 
 /*
