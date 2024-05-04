@@ -1,5 +1,5 @@
-import ASTVisitor from "./visitor";
-import type { SyntaxTree } from "../frontend/ast";
+import ASTVisitor from "./ast_visitor";
+import type { SyntaxTree } from "../../frontend/ast";
 
 
 /*

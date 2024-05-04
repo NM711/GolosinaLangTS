@@ -3,7 +3,7 @@ import fs from "node:fs";
 import Lexer from "./src/frontend/lexer"
 import Parser from "./src/frontend/parser"
 import Debug from "./src/debug"
-import Walker  from "./src/runtime/walker"
+import Walker  from "./src/runtime/interpreter/walker"
 
 class GolosinaCommandLineInterface {
   private lexer: Lexer;

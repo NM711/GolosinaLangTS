@@ -15,6 +15,7 @@ export enum NodeIdentifiers {
   N_SWITCH_SMTNT,
   N_SWITCH_CASE,
   N_RETURN_STMNT,
+  N_CLONE_STMNT,
   N_BREAK_STMTN,
   N_MODULE,
   N_IDENT,
@@ -25,7 +26,6 @@ export enum NodeIdentifiers {
   N_OBJECT_EXPR,
   N_BLOCK,
   N_ACCESSING,
-  N_EXPR_CLONE,
 };
 
 export namespace SyntaxTree {
@@ -246,12 +246,12 @@ export namespace SyntaxTree {
     public accept(): void{};
   };
 
-  export class CloneExpressionNode extends BaseNodeAST {
+  export class CloneStatementNode extends BaseNodeAST {
     public cloning: IdentfierNode;
     public object: ObjectExpressionNode;
 
     constructor(info: LinePosition) {
-      super(NodeIdentifiers.N_EXPR_CLONE, "CloneExpression", info);
+      super(NodeIdentifiers.N_CLONE_STMNT, "CloneStatement", info);
     };
 
     public accept(visitor: TreeVisitor): void {

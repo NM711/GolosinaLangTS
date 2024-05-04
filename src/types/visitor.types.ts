@@ -12,7 +12,7 @@ export abstract class AbstractVisitor {
   public abstract visitBlockStmnt(node: SyntaxTree.BlockNode): void;
   public abstract visitMethod(node: SyntaxTree.MethodNode): void;
   public abstract visitCallExpr(node: SyntaxTree.ExpressionCallNode): void;
-  public abstract visitCloneExpr(node: SyntaxTree.CloneExpressionNode): void;
+  public abstract visitCloneStmnt(node: SyntaxTree.CloneStatementNode): void;
   public abstract visitMemberExpr(node: SyntaxTree.MemberExpressionNode): void;
   public abstract visitVar(node: SyntaxTree.VariableNode): void;
 };

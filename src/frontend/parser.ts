@@ -2,13 +2,17 @@ import { SyntaxTree, NodeIdentifiers } from "./ast";
 import { Token, TokenIdentifiers } from "../types/token.types";
 import { GolosinaSyntaxError } from "../exceptions"
 import { DataType } from "../common";
+import TreeNodeTypeGuard from "../guards/node_gurads";
+import SemanticValidator from "./semantic_validator";
 
 class Parser {
+  private validator: SemanticValidator;
   private tokens: Token[];
   private index: number;
-
+  
   constructor() {
-    this.index = 0;  
+    this.validator = new SemanticValidator();
+    this.index = 0;   
   };
    
   public set setSource(tokens: Token[]) {
@@ -34,25 +38,8 @@ class Parser {
     };
   };
 
-  private expected(id: TokenIdentifiers, lexeme: string) {
-    if (this.look.id !== id) {
-      throw new GolosinaSyntaxError(`Expected token "${lexeme}" instead received "${this.look.lexeme}"!`, this.look.info);
-    };
-  };
-
   private isTokenID(id: TokenIdentifiers): boolean {
     return id === this.look.id;
-  };
-
-  private checkAssignment(node: SyntaxTree.BaseNodeAST) {
-    const expectedIds = new Set([
-      NodeIdentifiers.N_IDENT, NodeIdentifiers.N_LITERAL, NodeIdentifiers.N_METHOD,
-      NodeIdentifiers.N_EXPR_CLONE, NodeIdentifiers.N_BINARY_EXPR, NodeIdentifiers.N_UNARY_EXPR
-    ]);
-
-    if (!expectedIds.has(node.id)) {
-      throw new GolosinaSyntaxError(`Invalid right hand side assignment!`, node.info);
-    };
   };
 
   private parsePrimary(): SyntaxTree.BaseNodeAST {
@@ -79,25 +66,26 @@ class Parser {
     this.eat();
     const returned = new SyntaxTree.ReturnNode(this.look.info, this.parse());
 
-    if (returned.value.id !== NodeIdentifiers.N_LITERAL && returned.value.id !== NodeIdentifiers.N_IDENT && returned.value.id !== NodeIdentifiers.N_EXPR_CLONE) {
+    if (!TreeNodeTypeGuard.isLiteral(returned.value) && !TreeNodeTypeGuard.isIdent(returned.value) && !TreeNodeTypeGuard.isCloneStmnt(returned.value)) {
       throw new GolosinaSyntaxError(`Unexpected value in return statement at "${this.look.lexeme}"!`, this.look.info);
-    }
+    };
+
     return returned;
   };
 
   private parseBlock(): SyntaxTree.BlockNode {
     const block = new SyntaxTree.BlockNode(this.look.info);
 
-    this.expected(TokenIdentifiers.LEFT_CURLY, "{");
+    this.validator.expect.leftCurly(this.look);
     this.eat();
 
     while (this.look.id !== TokenIdentifiers.RIGHT_CURLY) {
       block.body.push(this.parse());
-      this.expected(TokenIdentifiers.SEMICOLON, ";");
+      this.validator.expect.semicolon(this.look);
       this.eat();
     };
 
-    this.expected(TokenIdentifiers.RIGHT_CURLY, "}");
+    this.validator.expect.rightCurly(this.look);
     this.eat();
 
     return block;
@@ -105,11 +93,9 @@ class Parser {
 
   private parseParams(params: SyntaxTree.IdentfierNode[]) {
     while (true) {
-
-      this.expected(TokenIdentifiers.IDENT, "Param Ident");
-      const ident = this.parsePrimary() as SyntaxTree.IdentfierNode;
+      const ident = this.validator.expect.ident(this.parsePrimary(), "Parameter Identifier");
       this.eat();
-
+      
       params.push(ident);
 
       if (this.index === this.tokens.length) {
@@ -120,7 +106,7 @@ class Parser {
         break;
       };
 
-      this.expected(TokenIdentifiers.SEPERATOR, ",");
+      this.validator.expect.seperator(this.look);
       this.eat();
     };
   };
@@ -129,15 +115,15 @@ class Parser {
     const ifStmnt = new SyntaxTree.IfStmntNode(this.look.info);
     this.eat();
 
-    this.expected(TokenIdentifiers.LEFT_PARENTHESIS, "(");
+    this.validator.expect.leftParenthesis(this.look);
     this.eat();
 
-    ifStmnt.expression = this.parse();
-
-    this.expected(TokenIdentifiers.RIGHT_PARENTHESIS, ")");
+    ifStmnt.expression = this.validator.validateIfExpression(this.parse());
+    this.validator.expect.rightParenthesis(this.look);
     this.eat();
     
     ifStmnt.block = this.parseBlock();
+
     if (this.isTokenID(TokenIdentifiers.ELSE)) {
       this.eat();
       ifStmnt.alternate = (this.isTokenID(TokenIdentifiers.IF)) ? this.parseIfStmnt() : this.parseBlock();
@@ -150,14 +136,13 @@ class Parser {
     const fn = new SyntaxTree.MethodNode(this.look.info);
     this.eat();
 
-    this.expected(TokenIdentifiers.LEFT_PARENTHESIS, "(");
-    this.eat();
+    this.validator.expect.leftParenthesis(this.look);
 
     if (!this.isTokenID(TokenIdentifiers.RIGHT_PARENTHESIS)) {
       this.parseParams(fn.params);
     };
 
-    this.expected(TokenIdentifiers.RIGHT_PARENTHESIS, ")");
+    this.validator.expect.rightParenthesis(this.look);
     this.eat();
 
     fn.block = this.parseBlock();
@@ -173,39 +158,31 @@ class Parser {
     };
   
     this.eat();
-    this.expected(TokenIdentifiers.IDENT, "Variable Identifier");
-    variable.ident = this.parsePrimary() as SyntaxTree.IdentfierNode;  
+
+    variable.ident = this.validator.expect.ident(this.parsePrimary(), "Variable Identifier");
     this.eat();
 
     if (this.isTokenID(TokenIdentifiers.BINARY_ASSIGNMENT)) {
       this.eat();
-
-      variable.init = this.parse();
+      variable.init = this.validator.validateVarInit(this.parse());
     };
 
-    if (variable.init === null && variable.isConst === true) {
-      throw new GolosinaSyntaxError(`Uninitialized constant at "${variable.ident.name}"`, variable.info);
-    };
-
+    this.validator.validateConstant(variable);
+    
     return variable;
   };
 
   private parseObjectMembers(members: SyntaxTree.DirectMemberNode[]) {
     while (true) {
       const direct = new SyntaxTree.DirectMemberNode(this.look.info);
-      
-      this.expected(TokenIdentifiers.IDENT, "Object key identifier");
-      direct.key = this.parsePrimary() as SyntaxTree.IdentfierNode;
+
+      direct.key = this.validator.expect.ident(this.parsePrimary(), "Object Key Identfier");  
       this.eat();
 
-      this.expected(TokenIdentifiers.BINARY_ASSIGNMENT, "=");
+      this.validator.expect.token(TokenIdentifiers.BINARY_ASSIGNMENT, "=", this.look);
       this.eat();
-      
-      const rhsValue = this.parse();
 
-      this.checkAssignment(rhsValue);
-      
-      direct.value = rhsValue;
+      direct.value = this.validator.validateAssignmentRHS(this.parse());      
 
       members.push(direct);
       
@@ -217,30 +194,31 @@ class Parser {
         break;
       };
 
-      this.expected(TokenIdentifiers.SEPERATOR, ",");
+      this.validator.expect.seperator(this.look);
       this.eat();
     };
   };
 
   private parseObjectExpr(): SyntaxTree.ObjectExpressionNode {
-    this.expected(TokenIdentifiers.LEFT_CURLY, `Object opening "{"`);
+    this.validator.expect.leftCurly(this.look);
     const object = new SyntaxTree.ObjectExpressionNode(this.look.info);
     this.eat();
 
     if (!this.isTokenID(TokenIdentifiers.RIGHT_CURLY)) {
       this.parseObjectMembers(object.members);
     };
+
+    this.validator.expect.rightCurly(this.look);
     this.eat();
 
     return object;    
   };
 
-  private parseCloneExpr(): SyntaxTree.CloneExpressionNode {
-    const cloningExpr = new SyntaxTree.CloneExpressionNode(this.look.info);
+  private parseCloneStmnt(): SyntaxTree.CloneStatementNode {
+    const cloningExpr = new SyntaxTree.CloneStatementNode(this.look.info);
     this.eat();
 
-    this.expected(TokenIdentifiers.IDENT, "Cloned Object Identifier");
-    cloningExpr.cloning = this.parsePrimary() as SyntaxTree.IdentfierNode;
+    cloningExpr.cloning = this.validator.expect.ident(this.parsePrimary(), "Clone Object Identifier");
     this.eat();
 
     cloningExpr.object = this.parseObjectExpr();
@@ -251,14 +229,11 @@ class Parser {
   private parseArguments(args: (SyntaxTree.IdentfierNode | SyntaxTree.LiteralNode | SyntaxTree.MemberExpressionNode)[]) {
     while (true) {
       
-      const arg = this.parse();
-      
-      if (arg.id !== NodeIdentifiers.N_IDENT && arg.id !== NodeIdentifiers.N_LITERAL && arg.id !== NodeIdentifiers.N_MEMBER_EXPR) {
-        throw new GolosinaSyntaxError(`Invalid argument has been set at "${this.look.lexeme}"!`, this.look.info);
-      };
 
-      args.push(arg as (SyntaxTree.IdentfierNode | SyntaxTree.LiteralNode));
+      const arg = this.validator.validateArguments(this.parse());
       
+      args.push(arg);
+
       if (this.index === this.tokens.length) {
         throw new GolosinaSyntaxError(`Expected ")" but instead reached "EOF"!`, this.look.info);
       };
@@ -267,7 +242,7 @@ class Parser {
         break;
       };
 
-      this.expected(TokenIdentifiers.SEPERATOR, ",");
+      this.validator.expect.seperator(this.look);
       this.eat();
     };
 
@@ -282,13 +257,13 @@ class Parser {
       this.eat();
     };
 
-    while ((lhs.id === NodeIdentifiers.N_IDENT || lhs.id === NodeIdentifiers.N_MEMBER_EXPR) && this.isTokenID(TokenIdentifiers.ARROW)) {
+    while ((TreeNodeTypeGuard.isIdent(lhs) || TreeNodeTypeGuard.isMemberExpr(lhs)) && this.isTokenID(TokenIdentifiers.ARROW)) {
       const memberExpr = new SyntaxTree.MemberExpressionNode(this.look.info);
       // eat operator "->"
       this.eat();
-      memberExpr.parent = lhs as (SyntaxTree.IdentfierNode | SyntaxTree.MemberExpressionNode);
-      this.expected(TokenIdentifiers.IDENT, "Member accessor identifier");
-      memberExpr.accessing = this.parsePrimary() as SyntaxTree.IdentfierNode;
+      memberExpr.parent = lhs;
+
+      memberExpr.accessing = this.validator.expect.ident(this.parsePrimary(), `Member Accessor Identifier`);
       this.eat();
 
       lhs = memberExpr;
@@ -303,14 +278,16 @@ class Parser {
     if (this.isTokenID(TokenIdentifiers.LEFT_PARENTHESIS)) {
       const call = new SyntaxTree.ExpressionCallNode(this.look.info);
       this.eat();
-      call.callee = lhs as SyntaxTree.IdentfierNode | SyntaxTree.MemberExpressionNode;
+
+      call.callee = this.validator.validateCallLHS(lhs);
+      
       // parse arguments
 
       if (!this.isTokenID(TokenIdentifiers.RIGHT_PARENTHESIS)) {
         this.parseArguments(call.arguments);
       };
 
-      this.expected(TokenIdentifiers.RIGHT_PARENTHESIS, ")");
+      this.validator.expect.leftParenthesis(this.look);
       this.eat();
 
       lhs = call;
@@ -320,6 +297,7 @@ class Parser {
 
   private parsePostfix(): SyntaxTree.BaseNodeAST {
     let lhs: SyntaxTree.BaseNodeAST = this.parseCallExpr();
+
     if (lhs.id === NodeIdentifiers.N_IDENT && (this.isTokenID(TokenIdentifiers.UNARY_INCREMENT) || this.isTokenID(TokenIdentifiers.UNARY_DECREMENT))) {
       const unary = new SyntaxTree.UnaryExpressionNode(this.look.info);
       unary.argument = lhs;
@@ -340,8 +318,7 @@ class Parser {
       unary.isPrefix = true;
       unary.op = this.look.lexeme;
       this.eat();
-      this.expected(TokenIdentifiers.IDENT, "Identifier");
-      unary.argument = this.parse();
+      unary.argument = this.validator.expect.memberOrIdent(this.parse());
       lhs = unary;
     };
 
@@ -439,16 +416,10 @@ class Parser {
     if (this.look.id === TokenIdentifiers.BINARY_ASSIGNMENT) {
       const assignment = new SyntaxTree.AssignmentExpressionNode(this.look.info);
 
-      if (lhs.id !== NodeIdentifiers.N_IDENT && lhs.id !== NodeIdentifiers.N_MEMBER_EXPR) {
-        throw new GolosinaSyntaxError(`Invalid assignment due to left hand side!`, this.look.info);
-      };
-      
-      assignment.lhs = lhs as (SyntaxTree.IdentfierNode | SyntaxTree.MemberExpressionNode);
+      assignment.lhs = this.validator.validateAssignmentLHS(lhs);
       assignment.op = this.look.lexeme;
       this.eat();
-      const rhsValue = this.parse();
-      this.checkAssignment(rhsValue)
-      assignment.rhs = rhsValue;
+      assignment.rhs = this.validator.validateAssignmentRHS(this.parse());
       lhs = assignment;
     };
 
@@ -466,7 +437,7 @@ class Parser {
         return this.parseVar()
 
       case TokenIdentifiers.CLONE:
-        return this.parseCloneExpr();
+        return this.parseCloneStmnt();
 
       case TokenIdentifiers.METHOD:
         return this.parseMethod();
@@ -488,7 +459,7 @@ class Parser {
     while (this.index < this.tokens.length) {
       try {
         program.push(this.parse());
-        this.expected(TokenIdentifiers.SEMICOLON, ";");
+        this.validator.expect.semicolon(this.look);
         this.eat();
       } catch (e) {
         console.error(e.name, e.message);

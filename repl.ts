@@ -1,6 +1,6 @@
 import Lexer from "./src/frontend/lexer";
 import Parser from "./src/frontend/parser";
-import Walker from "./src/runtime/walker";
+import Walker from "./src/runtime/interpreter/walker"
 import Readline from "node:readline";
 
 class Repl {

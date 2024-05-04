@@ -150,7 +150,7 @@ export namespace RuntimeObjects {
     };
 
     public isFloat(): this is FloatObject  {
-      return this.dataType === DataType.T_FLOAT;
+      return (this.dataType === DataType.T_FLOAT) && Number.isInteger(this.value);
     };
 
     public isInt(): this is IntegerObject {
