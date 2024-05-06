@@ -13,21 +13,40 @@ let y = x->callme();
 
 fmt->log(y);
 
-for (let i = 0; i < 10; ++i) {
-	fmt->log(i);
+const operation = clone Object {
+	loop = method () {
+		for (let i = 0; i < 10; ++i) {
+			fmt->log(i);
 
-	if (i <= 5) {
-		fmt->log("Hello");
-		continue;
-	};
+			if (i <= 5) {
+				fmt->log("Hello");
+				continue;
+			};
 	
-	fmt->log("GreaterThan 5");
+			fmt->log("GreaterThan 5");
 	
-	if (i == 6) {
-		fmt->log("i is equal to 6!");
-		break;
-	};
+			if (i == 6) {
+				fmt->log("i is equal to 6!");
+				fmt->log("Something cool: ", i);
+				return i;
+			};
+		};
+	},
+	vec1 = vector,
+	populate = method () {
+		fmt->print(this);
+		this->vec1->push(123);	
+	}
 };
+
+const result = operation->loop();
+
+fmt->log("Loop Result: ", result);
+
+operation->populate();
+
+# fmt->log(operation->vec1->get());
+
 
 const greet = "Hallo";
 

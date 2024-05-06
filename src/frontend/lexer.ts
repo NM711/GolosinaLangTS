@@ -182,7 +182,7 @@ class Lexer {
         this.pushToken("}", TokenIdentifiers.RIGHT_CURLY);
         this.eat();
       break;
-        
+              
       case "&":
         this.handleDoubleCharSpecial("&", "&", TokenIdentifiers.AMPERSAND, TokenIdentifiers.BINARY_AND);
       break;

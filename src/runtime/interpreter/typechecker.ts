@@ -107,16 +107,6 @@ class GolosinaTypeChecker {
     
     return data.value;
   };
-
-  /**
-    Checks if assignment is valid.
-  */
-
-  public checkAssignment() {
-    
-  };
-
-  
 };
 
 

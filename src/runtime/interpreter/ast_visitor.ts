@@ -9,10 +9,11 @@ import { DataType } from "../../common";
 import { SyntaxTree } from "../../frontend/ast";
 import { RuntimeValues, RuntimeObjects, ParamState } from "../runtime_values"
 import { ScopeIdentifier } from "../environment";
+import { GolosinaRuntimeError } from "../../exceptions";
 
 class Stack {
   private frames: RuntimeValues.Value[][];
-  private frame: RuntimeValues.Value[];
+  public frame: RuntimeValues.Value[];
   
   constructor() {
     // we init the frame and push the frame that pertains to the global execution environment.
@@ -21,7 +22,8 @@ class Stack {
   };
 
 
-  public updateFrame() {
+  
+  private updateFrame() {
     this.frame = this.frames[this.frames.length - 1];
   };
 
@@ -35,11 +37,11 @@ class Stack {
     this.updateFrame();
   };
 
-  public popFrameValue(): RuntimeValues.Value {
+  public popValue(): RuntimeValues.Value {
     return this.frame.pop() as RuntimeValues.Value;
   };
 
-  public pushFrameValue(value: RuntimeValues.Value): void {
+  public pushValue(value: RuntimeValues.Value): void {
     this.frame.push(value);
   };
 };
@@ -49,7 +51,7 @@ class ASTVisitor extends AbstractVisitor {
   private tc: GolosinaTypeChecker;
   private environment: Environment;
   private meta: MetaData;
-  private stack: RuntimeValues.Value[];
+  private stack: Stack;
   private context: RuntimeValues.Object;
 
   constructor() {
@@ -58,14 +60,36 @@ class ASTVisitor extends AbstractVisitor {
     this.environment = new Environment();
     this.meta = new MetaData();
     this.context = new RuntimeValues.Object();
-    this.stack = [];
+    this.stack = new Stack();
     this.initNative();
   };
 
   private initNative() {
     const native = new NativeObjects();
+    this.environment.declare("vector", native.getVector);
     this.environment.declare("fmt", native.getFmt);
+    this.environment.declare("os", native.getOS);
     this.environment.declare("Object", new RuntimeValues.Object());
+  };
+
+  private convertV8ValueToGolosinaObj(value: any) {
+    switch (typeof value) {
+      case "string":
+        return new RuntimeObjects.StringObject(value);
+
+      case "boolean":
+        return new RuntimeObjects.BooleanObject(value);
+      
+      case "number":
+        return (Number.isInteger(value)) ? new RuntimeObjects.IntegerObject(value) : new RuntimeObjects.FloatObject(value);
+        
+      case "undefined":
+        return new RuntimeObjects.NullObject();
+
+      default:
+        console.log("Unexpected conversion!");
+        process.exit(1);
+    };
   };
 
   private handleNativeMethodCall(node: SyntaxTree.ExpressionCallNode, nativeMethod: RuntimeValues.MethodNative) {
@@ -78,19 +102,25 @@ class ASTVisitor extends AbstractVisitor {
       });
     };
 
-    const values: RuntimeObjects.TypeValue[] = []
-
+    const runtimeArgs: RuntimeValues.Object[] = []
+    
+    
     for (const arg of node.arguments) {
       arg.accept(this);
+      const value = this.stack.popValue();
 
-      const value = this.stack.pop() as RuntimeObjects.ValueObject;
+      if (!RuntimeValueTypeGuard.isObject(value)) {
+        throw new GolosinaRuntimeError(`Arguments passed to a method call is of invalid object type value!`, arg.info);
+      };
 
-      // run a typecheck here make sure the values are of value objects.
-
-      values.push(value.value);
+      runtimeArgs.push(value);      
     };
 
-    nativeMethod.exec(values);
+    const value = nativeMethod.exec(runtimeArgs);
+   
+    // we need to convert native v8 values into a representation we can read in golosina.
+    const newObject = this.convertV8ValueToGolosinaObj(value);
+    this.stack.pushValue(newObject);  
   };
 
   private handleMethodCall(node: SyntaxTree.ExpressionCallNode, method: RuntimeValues.Method) {
@@ -104,28 +134,26 @@ class ASTVisitor extends AbstractVisitor {
     this.environment.pushScope(ScopeIdentifier.S_METHOD);
     // inject ref to current object
     this.environment.declare("this", this.context);
-
+    
     for (let i = 0; i < method.params.length; ++i) {
       const arg = node.arguments[i];
       const param = method.params[i];
       arg.accept(this);
-      const value = this.stack.pop() as RuntimeValues.Value;
+      const value = this.stack.popValue();
       this.environment.declare(param.name, value);
     };
 
     method.block.accept(this);
-
     this.environment.popScope();
   };
-
 
   public override visitBinaryExpr(node: SyntaxTree.BinaryExpressionNode) {
     node.lhs.accept(this);
     node.rhs.accept(this);
 
-    let uncheckedRHS = this.stack.pop() as RuntimeValues.Value;
+    let uncheckedRHS = this.stack.popValue();
 
-    let uncheckedLHS = this.stack.pop() as RuntimeValues.Value;
+    let uncheckedLHS = this.stack.popValue();
 
     const { lhs, rhs } = this.tc.checkBinaryArithmetic(node.op,
       {
@@ -199,11 +227,11 @@ class ASTVisitor extends AbstractVisitor {
 
 
     if (typeof value === "string") {
-      this.stack.push(new RuntimeObjects.StringObject(value));
+      this.stack.pushValue(new RuntimeObjects.StringObject(value));
     } else if (typeof value === "boolean") {
-      this.stack.push(new RuntimeObjects.BooleanObject(value));
+      this.stack.pushValue(new RuntimeObjects.BooleanObject(value));
     } else if (typeof value === "number") {
-      (Number.isInteger(value)) ? this.stack.push(new RuntimeObjects.IntegerObject(value)) : this.stack.push(new RuntimeObjects.FloatObject(value));
+      (Number.isInteger(value)) ? this.stack.pushValue(new RuntimeObjects.IntegerObject(value)) : this.stack.pushValue(new RuntimeObjects.FloatObject(value));
     };
 
   };
@@ -218,7 +246,7 @@ class ASTVisitor extends AbstractVisitor {
 
     node.argument.accept(this);
 
-    const objectValue = this.stack.pop() as RuntimeObjects.ValueObject;
+    const objectValue = this.stack.popValue() as RuntimeObjects.ValueObject;
 
     const params = {
       info: node.info,
@@ -233,7 +261,7 @@ class ASTVisitor extends AbstractVisitor {
         if (node.isPrefix) {
           // this can encompass either float object or int object.
           numeric.value += 1;
-          this.stack.push(numeric);
+          this.stack.pushValue(numeric);
           (TreeNodeTypeGuard.isMemberExpr(node.argument)) ? this.context.setMember(this.meta.getSymbol, numeric) : this.environment.assign(this.meta.getSymbol, numeric);
           break;
         } else {
@@ -242,7 +270,7 @@ class ASTVisitor extends AbstractVisitor {
           // we need to create a new one, then perform the operation on the original.
 
           const postNumeric = (!Number.isInteger(numeric.value)) ? new RuntimeObjects.FloatObject(numeric.value) : new RuntimeObjects.IntegerObject(numeric.value);
-          this.stack.push(postNumeric);
+          this.stack.pushValue(postNumeric);
           numeric.value += 1;
           (TreeNodeTypeGuard.isMemberExpr(node.argument)) ? this.context.setMember(this.meta.getSymbol, numeric) : this.environment.assign(this.meta.getSymbol, numeric);
         };
@@ -256,7 +284,7 @@ class ASTVisitor extends AbstractVisitor {
         if (node.isPrefix) {
           // this can encompass either float object or int object.
           numeric.value -= 1;
-          this.stack.push(numeric);
+          this.stack.pushValue(numeric);
           (TreeNodeTypeGuard.isMemberExpr(node.argument)) ? this.context.setMember(this.meta.getSymbol, numeric) : this.environment.assign(this.meta.getSymbol, numeric);
 
         } else {
@@ -265,7 +293,7 @@ class ASTVisitor extends AbstractVisitor {
           // we need to create a new one, then perform the operation on the original.
 
           const postNumeric = (!Number.isInteger(numeric.value)) ? new RuntimeObjects.FloatObject(numeric.value) : new RuntimeObjects.IntegerObject(numeric.value);
-          this.stack.push(postNumeric);
+          this.stack.pushValue(postNumeric);
           numeric.value -= 1;
           (TreeNodeTypeGuard.isMemberExpr(node.argument)) ? this.context.setMember(this.meta.getSymbol, numeric) : this.environment.assign(this.meta.getSymbol, numeric);
         };
@@ -277,7 +305,7 @@ class ASTVisitor extends AbstractVisitor {
       case "!": {
         if (node.isPrefix) {
           const not = new RuntimeObjects.BooleanObject(!objectValue.value);
-          this.stack.push(not);
+          this.stack.pushValue(not);
         };
 
         break;
@@ -291,13 +319,13 @@ class ASTVisitor extends AbstractVisitor {
 
       node.rhs.accept(this);
 
-      const value = this.stack.pop() as RuntimeValues.Value;
+      const value = this.stack.popValue();
 
       this.context.setMember(this.meta.getSymbol, value);
 
     } else {
       node.rhs.accept(this);
-      const value = this.stack.pop() as RuntimeValues.Value;
+      const value = this.stack.popValue();
       this.environment.assign(node.lhs.name, value);
     };
   };
@@ -305,7 +333,7 @@ class ASTVisitor extends AbstractVisitor {
   public override visitMemberExpr(node: SyntaxTree.MemberExpressionNode) {
     node.parent.accept(this);
 
-    const parent = this.stack.pop() as RuntimeValues.Object | RuntimeValues.Variable;
+    const parent = this.stack.popValue() as RuntimeValues.Object | RuntimeValues.Variable;
 
     this.tc.checkObject({
       ident: null,
@@ -326,12 +354,12 @@ class ASTVisitor extends AbstractVisitor {
     this.meta.setSymbol = node.accessing.name;
 
     const retrieved = prototype.getMember(node.accessing.name);
-    this.stack.push(retrieved);
+    this.stack.pushValue(retrieved);
   };
 
   public override visitCloneStmnt(node: SyntaxTree.CloneStatementNode) {
     node.cloning.accept(this);
-    const resolvedPrototype = this.stack.pop() as RuntimeValues.Value;
+    const resolvedPrototype = this.stack.popValue();
 
     const ref = this.tc.checkObject({
       ident: node.cloning.name,
@@ -350,23 +378,23 @@ class ASTVisitor extends AbstractVisitor {
 
     for (const member of node.object.members) {
       member.value.accept(this);
-      const value = this.stack.pop() as RuntimeValues.Value;
+      const value = this.stack.popValue();
       instantiated.members.set(member.key.name, value);
     };
 
-    this.stack.push(instantiated);
+    this.stack.pushValue(instantiated);
   };
 
   public override visitCallExpr(node: SyntaxTree.ExpressionCallNode) {
     node.callee.accept(this);
-
-    const value = this.stack.pop() as RuntimeValues.Value;
-
+    const value = this.stack.popValue();
     const method = this.tc.checkMethod({
       ident: this.meta.getSymbol,
       info: node.info,
       value: value
     });
+
+    this.stack.pushFrame();
 
     if (RuntimeValueTypeGuard.isMethod(method)) {
       this.handleMethodCall(node, method);
@@ -374,28 +402,41 @@ class ASTVisitor extends AbstractVisitor {
       this.handleNativeMethodCall(node, method);
     };
 
+    let returned: RuntimeValues.Value | null = null;
+
+    if (this.meta.getDispatchID === DispatchID.RETURN) {
+      this.meta.resetDispatchID();
+      returned = this.stack.popValue();
+    };
+
+    this.stack.popFrame();
+
+
+    if (returned) {
+      this.stack.pushValue(returned);
+    };
   };
 
   public override visitLiteral(node: SyntaxTree.LiteralNode) {
     switch (node.type) {
       case DataType.T_BOOLEAN:
-        (node.value === "true") ? this.stack.push(new RuntimeObjects.BooleanObject(true)) : this.stack.push(new RuntimeObjects.BooleanObject(false));
+        (node.value === "true") ? this.stack.pushValue(new RuntimeObjects.BooleanObject(true)) : this.stack.pushValue(new RuntimeObjects.BooleanObject(false));
         break;
 
       case DataType.T_NULL:
-        this.stack.push(new RuntimeObjects.NullObject());
+        this.stack.pushValue(new RuntimeObjects.NullObject());
         break;
 
       case DataType.T_INTEGER:
-        this.stack.push(new RuntimeObjects.IntegerObject(parseInt(node.value)));
+        this.stack.pushValue(new RuntimeObjects.IntegerObject(parseInt(node.value)));
         break;
 
       case DataType.T_FLOAT:
-        this.stack.push(new RuntimeObjects.FloatObject(parseFloat(node.value)));
+        this.stack.pushValue(new RuntimeObjects.FloatObject(parseFloat(node.value)));
         break;
 
       case DataType.T_STRING:
-        this.stack.push(new RuntimeObjects.StringObject(node.value));
+        this.stack.pushValue(new RuntimeObjects.StringObject(node.value));
         break;
     };
   };
@@ -404,13 +445,11 @@ class ASTVisitor extends AbstractVisitor {
     this.meta.setSymbol = node.name;
 
     const resolved = this.environment.resolve(node.name);
-
     if (RuntimeValueTypeGuard.isVariable(resolved)) {
-      this.stack.push(resolved.value);
+      (!resolved.value) ? this.stack.pushValue(new RuntimeObjects.NullObject()) : this.stack.pushValue(resolved.value);
     } else {
-      this.stack.push(resolved);
+      this.stack.pushValue(resolved);
     };
-
   };
 
   public override visitVar(node: SyntaxTree.VariableNode) {
@@ -418,7 +457,7 @@ class ASTVisitor extends AbstractVisitor {
 
     if (node.init) {
       node.init.accept(this);
-      init = this.stack.pop() as RuntimeValues.Object;
+      init = this.stack.popValue() as RuntimeValues.Object;
     };
 
     const runtimeVariable = new RuntimeValues.Variable();
@@ -430,18 +469,18 @@ class ASTVisitor extends AbstractVisitor {
 
   public override visitMethod(node: SyntaxTree.MethodNode) {
     const method = new RuntimeValues.Method(node.block, node.params);
-    this.stack.push(method);
+    this.stack.pushValue(method);
   };
 
   public override visitCaseStmnt(node: SyntaxTree.CaseStatementNode): void {
     node.discriminant.accept(this);
 
-    const discriminant = this.stack.pop() as RuntimeObjects.ValueObject;
+    const discriminant = this.stack.popValue() as RuntimeObjects.ValueObject;
     
     for (const test of node.tests) {
       if (!test.isDefault && test.condition) {
         test.condition.accept(this);
-        const expr = this.stack.pop() as RuntimeObjects.ValueObject;
+        const expr = this.stack.popValue() as RuntimeObjects.ValueObject;
         
         if ((expr && discriminant) && expr.value === discriminant.value) {
           test.block.accept(this);
@@ -460,7 +499,7 @@ class ASTVisitor extends AbstractVisitor {
 
   public override visitIfStmnt(node: SyntaxTree.IfStatementNode) {
     node.condition.accept(this);
-    const expr = this.stack.pop() as RuntimeObjects.ValueObject;
+    const expr = this.stack.popValue() as RuntimeObjects.ValueObject;
 
     if (expr && expr.value) {
       node.block.accept(this);
@@ -475,14 +514,18 @@ class ASTVisitor extends AbstractVisitor {
 
     while (true) {
       node.condition.accept(this);
-      const expr = this.stack.pop() as RuntimeObjects.ValueObject;
+      const expr = this.stack.popValue() as RuntimeObjects.ValueObject;
 
       if (!expr || (expr && !expr.value)) {
         break;
       };
 
       node.block.accept(this);
-      node.update.accept(this);
+
+
+      if (this.meta.getDispatchID === DispatchID.CONTINUE || this.meta.getDispatchID === DispatchID.NONE) {
+        node.update.accept(this);
+      };
       
       if (this.meta.getDispatchID === DispatchID.BREAK) {
         this.meta.resetDispatchID();
@@ -490,6 +533,8 @@ class ASTVisitor extends AbstractVisitor {
       } else if (this.meta.getDispatchID === DispatchID.CONTINUE) {
         this.meta.resetDispatchID();
         continue;
+      } else if (this.meta.getDispatchID === DispatchID.RETURN) {
+        break;
       };
     };
 
@@ -499,7 +544,7 @@ class ASTVisitor extends AbstractVisitor {
   public override visitWhileStmnt(node: SyntaxTree.WhileStatementNode): void {
     while (true) {
       node.condition.accept(this);
-      const expr = this.stack.pop() as RuntimeObjects.ValueObject;
+      const expr = this.stack.popValue() as RuntimeObjects.ValueObject;
 
       if (!expr || (expr && !expr.value)) {
         break;
@@ -513,11 +558,14 @@ class ASTVisitor extends AbstractVisitor {
       } else if (this.meta.getDispatchID === DispatchID.CONTINUE) {
         this.meta.resetDispatchID();
         continue;
+      } else if (this.meta.getDispatchID === DispatchID.RETURN) {
+        break;
       };
     };
   };
 
   public override visitReturnStmnt(node: SyntaxTree.ReturnStatementNode) {
+    this.meta.setDispatchID = DispatchID.RETURN;
     node.value.accept(this);
   };
 

@@ -221,7 +221,7 @@ class SemanticValidator {
   };
 
   public validateArguments(node: SyntaxTree.BaseNodeAST) {
-    if (!TreeNodeTypeGuard.isIdent(node) && !TreeNodeTypeGuard.isLiteral(node) && !TreeNodeTypeGuard.isMemberExpr(node)) {
+    if (!TreeNodeTypeGuard.isIdent(node) && !TreeNodeTypeGuard.isLiteral(node) && !TreeNodeTypeGuard.isMemberExpr(node) && !TreeNodeTypeGuard.isCallExpr(node)) {
       throw new GolosinaSyntaxError(`Invalid argument value has been set!`, node.info);
     };
 

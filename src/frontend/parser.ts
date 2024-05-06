@@ -1,4 +1,4 @@
-import { SyntaxTree, NodeIdentifiers } from "./ast";
+import { SyntaxTree } from "./ast";
 import { Token, TokenIdentifiers } from "../types/token.types";
 import { GolosinaSyntaxError } from "../exceptions"
 import { DataType } from "../common";
@@ -346,7 +346,7 @@ class Parser {
     return cloningExpr;
   };
 
-  private parseArguments(args: (SyntaxTree.IdentfierNode | SyntaxTree.LiteralNode | SyntaxTree.MemberExpressionNode)[]) {
+  private parseArguments(args: SyntaxTree.BaseNodeAST[]) {
     while (true) {
       const arg = this.validator.validateArguments(this.parse());
 

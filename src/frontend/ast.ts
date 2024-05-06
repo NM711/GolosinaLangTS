@@ -193,7 +193,7 @@ export namespace SyntaxTree {
   };
 
   export class ExpressionCallNode extends BaseNodeAST {
-    public arguments: (LiteralNode | IdentfierNode | MemberExpressionNode)[];
+    public arguments: BaseNodeAST[];
     public callee: IdentfierNode | MemberExpressionNode;
     constructor(info: LinePosition) {
       super(NodeIdentifiers.N_EXPR_CALL, "ExpressionCall", info);
