@@ -16,8 +16,9 @@ class Lexer {
     this.table = new Map();
     this.table.set("if", TokenIdentifiers.IF);
     this.table.set("else", TokenIdentifiers.ELSE);
-    this.table.set("switch", TokenIdentifiers.SWITCH);
     this.table.set("case", TokenIdentifiers.CASE);
+    this.table.set("of", TokenIdentifiers.OF);
+    this.table.set("default", TokenIdentifiers.DEFAULT);
     this.table.set("for", TokenIdentifiers.FOR);
     this.table.set("while", TokenIdentifiers.WHILE);
     this.table.set("const", TokenIdentifiers.CONST);
@@ -25,6 +26,7 @@ class Lexer {
     this.table.set("method", TokenIdentifiers.METHOD);
     this.table.set("return", TokenIdentifiers.RETURN);
     this.table.set("break", TokenIdentifiers.BREAK);
+    this.table.set("continue", TokenIdentifiers.CONTINUE);
     this.table.set("bool", TokenIdentifiers.BOOLEAN);
     this.table.set("null", TokenIdentifiers.NULL);
     this.table.set("int", TokenIdentifiers.INTEGER);

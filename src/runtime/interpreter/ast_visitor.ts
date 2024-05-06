@@ -2,14 +2,48 @@ import Environment from "../environment";
 import GolosinaTypeChecker from "./typechecker";
 import AbstractVisitor from "../../types/visitor.types";
 import NativeObjects from "../native/native_objects"
-import MetaData from "./meta";
+import MetaData, { DispatchID } from "./meta";
 import TreeNodeTypeGuard from "../../guards/node_gurads";
 import RuntimeValueTypeGuard from "../../guards/runtime_value_guards";
 import { DataType } from "../../common";
 import { SyntaxTree } from "../../frontend/ast";
 import { RuntimeValues, RuntimeObjects, ParamState } from "../runtime_values"
 import { ScopeIdentifier } from "../environment";
-import { INSPECT_MAX_BYTES } from "buffer";
+
+class Stack {
+  private frames: RuntimeValues.Value[][];
+  private frame: RuntimeValues.Value[];
+  
+  constructor() {
+    // we init the frame and push the frame that pertains to the global execution environment.
+    this.frames = [[]];
+    this.frame = this.frames[0];
+  };
+
+
+  public updateFrame() {
+    this.frame = this.frames[this.frames.length - 1];
+  };
+
+  public popFrame(): void {
+    this.frames.pop();
+    this.updateFrame();
+  };
+
+  public pushFrame(): void {
+    this.frames.push([]);
+    this.updateFrame();
+  };
+
+  public popFrameValue(): RuntimeValues.Value {
+    return this.frame.pop() as RuntimeValues.Value;
+  };
+
+  public pushFrameValue(value: RuntimeValues.Value): void {
+    this.frame.push(value);
+  };
+};
+
 
 class ASTVisitor extends AbstractVisitor {
   private tc: GolosinaTypeChecker;
@@ -30,64 +64,8 @@ class ASTVisitor extends AbstractVisitor {
 
   private initNative() {
     const native = new NativeObjects();
-
     this.environment.declare("fmt", native.getFmt);
     this.environment.declare("Object", new RuntimeValues.Object());
-  };
-
-
-  private handlePrefixUnaryExpr(node: SyntaxTree.UnaryExpressionNode, inMember: boolean) {
-    if (node.isPrefix && this.context) {
-      const objectValue = this.stack.pop() as RuntimeObjects.ValueObject;
-
-      const params = {
-        info: node.info,
-        ident: this.meta.getSymbol,
-        value: objectValue
-      };
-
-      switch (node.op) {
-        case "++": {
-          const numeric = this.tc.checkUnaryExpr(params, "pre-increment");
-          const preIncrement = new RuntimeObjects.IntegerObject(numeric.value + 1);
-          this.stack.push(preIncrement);
-
-          if (inMember) {
-            this.context.setMember(this.meta.getSymbol, preIncrement);
-          } else {
-            this.environment.assign(this.meta.getSymbol, preIncrement)
-          };
-
-          break;
-        };
-
-        case "--": {
-          const numeric = this.tc.checkUnaryExpr(params, "pre-decrement");
-          const preDecrement = new RuntimeObjects.IntegerObject(numeric.value - 1);
-          this.stack.push(preDecrement);
-
-          if (inMember) {
-            this.context.setMember(this.meta.getSymbol, preDecrement);
-          } else {
-            this.environment.assign(this.meta.getSymbol, preDecrement)
-          };
-
-          break;
-        };
-
-        case "!": {
-          const not = new RuntimeObjects.BooleanObject(!objectValue.value);
-          this.stack.push(not);
-          break;
-        };
-      };
-    };
-  };
-
-  private handlePostfixUnaryExpr(node: SyntaxTree.UnaryExpressionNode, inMember: boolean) {
-    if (!node.isPrefix && this.context) {
-
-    };
   };
 
   private handleNativeMethodCall(node: SyntaxTree.ExpressionCallNode, nativeMethod: RuntimeValues.MethodNative) {
@@ -125,10 +103,7 @@ class ASTVisitor extends AbstractVisitor {
 
     this.environment.pushScope(ScopeIdentifier.S_METHOD);
     // inject ref to current object
-
-    if (this.context) {
-      this.environment.declare("this", this.context);
-    };
+    this.environment.declare("this", this.context);
 
     for (let i = 0; i < method.params.length; ++i) {
       const arg = node.arguments[i];
@@ -161,7 +136,6 @@ class ASTVisitor extends AbstractVisitor {
         info: node.rhs.info,
         value: uncheckedRHS
       });
-
 
     let value: any = false;
     let left: any = lhs.value;
@@ -238,19 +212,11 @@ class ASTVisitor extends AbstractVisitor {
   public override visitUnaryExpr(node: SyntaxTree.UnaryExpressionNode) {
 
     /*
-      Prefix adds directly to the storage location and then resolved
-      Postfix resolves then adds to the in memory storage.
+      Postfix, increments but pushes the value before the increment to the stack.
+      Prefix, increments and pushes the incremented value to the stack.
     */
 
     node.argument.accept(this);
-
-    let inMember: boolean;
-
-    if (TreeNodeTypeGuard.isMemberExpr(node.argument)) {
-      inMember = true;
-    } else {
-      inMember = false;
-    };
 
     const objectValue = this.stack.pop() as RuntimeObjects.ValueObject;
 
@@ -260,41 +226,63 @@ class ASTVisitor extends AbstractVisitor {
       value: objectValue
     };
 
-    let numericObject: RuntimeObjects.NumericObject | null = null;
-
     switch (node.op) {
-      case "++":
+      case "++": {
+        const numeric = this.tc.checkUnaryExpr(params, "pre-increment");
 
         if (node.isPrefix) {
           // this can encompass either float object or int object.
-          numericObject = this.tc.checkUnaryExpr(params, "pre-increment");
-          numericObject.value = numericObject.value + 1;
+          numeric.value += 1;
+          this.stack.push(numeric);
+          (TreeNodeTypeGuard.isMemberExpr(node.argument)) ? this.context.setMember(this.meta.getSymbol, numeric) : this.environment.assign(this.meta.getSymbol, numeric);
+          break;
         } else {
 
+          // since the object will modify the int directly even after we push due to the referential nature of node objects.
+          // we need to create a new one, then perform the operation on the original.
+
+          const postNumeric = (!Number.isInteger(numeric.value)) ? new RuntimeObjects.FloatObject(numeric.value) : new RuntimeObjects.IntegerObject(numeric.value);
+          this.stack.push(postNumeric);
+          numeric.value += 1;
+          (TreeNodeTypeGuard.isMemberExpr(node.argument)) ? this.context.setMember(this.meta.getSymbol, numeric) : this.environment.assign(this.meta.getSymbol, numeric);
+        };
+
+        break;
+      };
+
+      case "--": {
+        const numeric = this.tc.checkUnaryExpr(params, "pre-decrement");
+
+        if (node.isPrefix) {
+          // this can encompass either float object or int object.
+          numeric.value -= 1;
+          this.stack.push(numeric);
+          (TreeNodeTypeGuard.isMemberExpr(node.argument)) ? this.context.setMember(this.meta.getSymbol, numeric) : this.environment.assign(this.meta.getSymbol, numeric);
+
+        } else {
+
+          // since the object will modify the int directly even after we push due to the referential nature of node objects.
+          // we need to create a new one, then perform the operation on the original.
+
+          const postNumeric = (!Number.isInteger(numeric.value)) ? new RuntimeObjects.FloatObject(numeric.value) : new RuntimeObjects.IntegerObject(numeric.value);
+          this.stack.push(postNumeric);
+          numeric.value -= 1;
+          (TreeNodeTypeGuard.isMemberExpr(node.argument)) ? this.context.setMember(this.meta.getSymbol, numeric) : this.environment.assign(this.meta.getSymbol, numeric);
         };
 
         break;
 
-      case "--":
-        if (node.isPrefix) {
-          // this can encompass either float object or int object.
-          numericObject = this.tc.checkUnaryExpr(params, "pre-decrement");
-          numericObject.value = numericObject.value - 1;
-        } else {
+      };
 
+      case "!": {
+        if (node.isPrefix) {
+          const not = new RuntimeObjects.BooleanObject(!objectValue.value);
+          this.stack.push(not);
         };
 
         break;
-
-      case "!":
+      };
     };
-
-    if (numericObject) {
-      this.stack.push(numericObject);
-
-      (TreeNodeTypeGuard.isMemberExpr(node.argument)) ? this.context?.setMember(this.meta.getSymbol, numericObject) : this.environment.assign(this.meta.getSymbol, numericObject);
-    };
-
   };
 
   public override visitAssignmentExpr(node: SyntaxTree.AssignmentExpressionNode) {
@@ -305,9 +293,7 @@ class ASTVisitor extends AbstractVisitor {
 
       const value = this.stack.pop() as RuntimeValues.Value;
 
-      if (this.context) {
-        this.context.setMember(this.meta.getSymbol, value);
-      };
+      this.context.setMember(this.meta.getSymbol, value);
 
     } else {
       node.rhs.accept(this);
@@ -384,7 +370,6 @@ class ASTVisitor extends AbstractVisitor {
 
     if (RuntimeValueTypeGuard.isMethod(method)) {
       this.handleMethodCall(node, method);
-
     } else {
       this.handleNativeMethodCall(node, method);
     };
@@ -440,7 +425,6 @@ class ASTVisitor extends AbstractVisitor {
     runtimeVariable.isConst = node.isConst;
     runtimeVariable.value = init;
 
-
     this.environment.declare(node.ident.name, runtimeVariable);
   };
 
@@ -449,25 +433,111 @@ class ASTVisitor extends AbstractVisitor {
     this.stack.push(method);
   };
 
-  public override visitIfStmnt(node: SyntaxTree.IfStmntNode) {
-    node.expression.accept(this);
-    const exprValue = this.stack.pop() as RuntimeObjects.ValueObject;
+  public override visitCaseStmnt(node: SyntaxTree.CaseStatementNode): void {
+    node.discriminant.accept(this);
 
-    if (exprValue && exprValue.value) {
+    const discriminant = this.stack.pop() as RuntimeObjects.ValueObject;
+    
+    for (const test of node.tests) {
+      if (!test.isDefault && test.condition) {
+        test.condition.accept(this);
+        const expr = this.stack.pop() as RuntimeObjects.ValueObject;
+        
+        if ((expr && discriminant) && expr.value === discriminant.value) {
+          test.block.accept(this);
+        };
+        
+      } else {
+        test.block.accept(this);
+      };
+      
+      if (this.meta.getDispatchID === DispatchID.BREAK) {
+        this.meta.resetDispatchID();
+        break;
+      };
+    };
+  };
+
+  public override visitIfStmnt(node: SyntaxTree.IfStatementNode) {
+    node.condition.accept(this);
+    const expr = this.stack.pop() as RuntimeObjects.ValueObject;
+
+    if (expr && expr.value) {
       node.block.accept(this);
     } else if (node.alternate) {
       node.alternate.accept(this);
     };
   };
 
-  public override visitReturnStmnt(node: SyntaxTree.ReturnNode) {
+  public override visitForStmnt(node: SyntaxTree.ForStatementNode): void {
+    this.environment.pushScope(ScopeIdentifier.S_LOOP);
+    node.init.accept(this);
+
+    while (true) {
+      node.condition.accept(this);
+      const expr = this.stack.pop() as RuntimeObjects.ValueObject;
+
+      if (!expr || (expr && !expr.value)) {
+        break;
+      };
+
+      node.block.accept(this);
+      node.update.accept(this);
+      
+      if (this.meta.getDispatchID === DispatchID.BREAK) {
+        this.meta.resetDispatchID();
+        break;
+      } else if (this.meta.getDispatchID === DispatchID.CONTINUE) {
+        this.meta.resetDispatchID();
+        continue;
+      };
+    };
+
+    this.environment.popScope();
+  };
+
+  public override visitWhileStmnt(node: SyntaxTree.WhileStatementNode): void {
+    while (true) {
+      node.condition.accept(this);
+      const expr = this.stack.pop() as RuntimeObjects.ValueObject;
+
+      if (!expr || (expr && !expr.value)) {
+        break;
+      };
+
+      node.block.accept(this);
+      
+      if (this.meta.getDispatchID === DispatchID.BREAK) {
+        this.meta.resetDispatchID();
+        break;
+      } else if (this.meta.getDispatchID === DispatchID.CONTINUE) {
+        this.meta.resetDispatchID();
+        continue;
+      };
+    };
+  };
+
+  public override visitReturnStmnt(node: SyntaxTree.ReturnStatementNode) {
     node.value.accept(this);
+  };
+
+  public override visitBreakStmnt(): void {
+    this.meta.setDispatchID = DispatchID.BREAK;
+  };
+
+  public override visitContinueStmnt(): void {
+    this.meta.setDispatchID = DispatchID.CONTINUE;
   };
 
   public override visitBlockStmnt(node: SyntaxTree.BlockNode) {
     this.environment.pushScope(ScopeIdentifier.S_BLOCK);
 
     for (const stmnt of node.body) {
+
+      if (this.meta.getDispatchID !== DispatchID.NONE) {
+        break;
+      };     
+
       stmnt.accept(this);
     };
 

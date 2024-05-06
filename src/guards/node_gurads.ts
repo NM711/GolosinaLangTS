@@ -30,7 +30,11 @@ class TreeNodeTypeGuard {
     return node.id === NodeIdentifiers.N_UNARY_EXPR;
   };
 
-  public static isMethod(node: SyntaxTree.MethodNode): node is SyntaxTree.MethodNode {
+  public static isCallExpr(node: SyntaxTree.BaseNodeAST) {
+    return node.id === NodeIdentifiers.N_EXPR_CALL;
+  };
+
+  public static isMethod(node: SyntaxTree.BaseNodeAST): node is SyntaxTree.MethodNode {
     return node.id === NodeIdentifiers.N_METHOD;
   };
 };

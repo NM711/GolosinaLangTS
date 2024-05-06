@@ -2,14 +2,48 @@
 
 const x = clone Object {
 	number = 10,
-	another = "Hello"
+	another = "Hello",
+	callme = method () {
+		let x = 10;
+		x;
+	}
 };
 
+let y = x->callme();
 
-++x->number;
+fmt->log(y);
 
-x->number = --x->number;
+for (let i = 0; i < 10; ++i) {
+	fmt->log(i);
 
-# x->number = x->number++ ;
+	if (i <= 5) {
+		fmt->log("Hello");
+		continue;
+	};
+	
+	fmt->log("GreaterThan 5");
+	
+	if (i == 6) {
+		fmt->log("i is equal to 6!");
+		break;
+	};
+};
 
-fmt->log(x->number);
+const greet = "Hallo";
+
+case (greet) {
+	of "hi" {
+		fmt->log("is in hi!");
+		break;
+	}
+
+	of "hello" {
+		fmt->log("is in hello");
+		break;
+	}
+	
+	default {
+		fmt->log("Is Default Test!");
+		return 10;
+	}
+};

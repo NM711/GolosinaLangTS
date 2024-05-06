@@ -1,4 +1,4 @@
-import type { Token } from "../src/frontend/token.types"
+import type { Token } from "./types/token.types";
 import type { SyntaxTree } from "./frontend/ast";
 
 class GolosinaDebug {

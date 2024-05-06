@@ -6,6 +6,7 @@ export enum ScopeIdentifier {
   S_OBJECT,
   S_BLOCK,
   S_METHOD,
+  S_LOOP,
 };
 
 export enum EnvironmentErrorState {
@@ -92,7 +93,7 @@ class Environment {
     };
 
     throw new GolosinaEnvironmentError(`Unable to resolve symbol at "${symbol}"`, EnvironmentErrorState.ENV_ERR_UNRESOLVED);
-  };  
+  };
 };
 
 export default Environment;

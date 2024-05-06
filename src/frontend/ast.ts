@@ -12,11 +12,12 @@ export enum NodeIdentifiers {
   N_IF_STMNT,
   N_FOR_STMNT,
   N_WHILE_STMNT,
-  N_SWITCH_SMTNT,
-  N_SWITCH_CASE,
+  N_CASE_TEST,
+  N_CASE_STMNT,
   N_RETURN_STMNT,
   N_CLONE_STMNT,
-  N_BREAK_STMTN,
+  N_BREAK_STMNT,
+  N_CONTINUE_STMNT,
   N_MODULE,
   N_IDENT,
   N_LITERAL,
@@ -61,7 +62,7 @@ export namespace SyntaxTree {
   };
 
   export class UnaryExpressionNode extends BaseNodeAST {
-    public argument: BaseNodeAST;
+    public argument: IdentfierNode | MemberExpressionNode;
     public op: string;
     public isPrefix: boolean;
 
@@ -149,10 +150,10 @@ export namespace SyntaxTree {
     };
   };
 
-  export class IfStmntNode extends BaseNodeAST {
+  export class IfStatementNode extends BaseNodeAST {
     public block: BlockNode;
-    public expression: BaseNodeAST;
-    public alternate: IfStmntNode | BlockNode;
+    public condition: BaseNodeAST;
+    public alternate: IfStatementNode | BlockNode;
 
     constructor(info: LinePosition) {
       super(NodeIdentifiers.N_IF_STMNT, "IfStmnt", info);
@@ -204,18 +205,30 @@ export namespace SyntaxTree {
     };
   };
 
-  export class BreakNode extends BaseNodeAST {
+  export class BreakStatementNode extends BaseNodeAST {
     constructor(info: LinePosition) {
-      super(NodeIdentifiers.N_BREAK_STMTN, "Break", info);
+      super(NodeIdentifiers.N_BREAK_STMNT, "BreakStatement", info);
     };
 
-    public accept(): void {};
+    public accept(visitor: TreeVisitor): void {
+      visitor.visitBreakStmnt();
+    };
   };
 
-  export class ReturnNode extends BaseNodeAST {
+  export class ContinueStatementNode extends BaseNodeAST {
+    constructor(info: LinePosition) {
+      super(NodeIdentifiers.N_CONTINUE_STMNT, "ContinueStatement", info);
+    };
+
+    public accept(visitor: TreeVisitor): void {
+      visitor.visitContinueStmnt();
+    };
+  };
+
+  export class ReturnStatementNode extends BaseNodeAST {
     public value: BaseNodeAST;
     constructor(info: LinePosition, value: BaseNodeAST) {
-      super(NodeIdentifiers.N_RETURN_STMNT, "Return", info);
+      super(NodeIdentifiers.N_RETURN_STMNT, "ReturnStatement", info);
       this.value = value;
     };
 
@@ -255,7 +268,64 @@ export namespace SyntaxTree {
     };
 
     public accept(visitor: TreeVisitor): void {
-      visitor.visitCloneExpr(this); 
+      visitor.visitCloneStmnt(this); 
+    };
+  };
+
+  export class ForStatementNode extends BaseNodeAST {
+    public init: BaseNodeAST;
+    public condition: BaseNodeAST;
+    public update: BaseNodeAST;
+    public block: BlockNode;
+
+    constructor(info: LinePosition) {
+      super(NodeIdentifiers.N_FOR_STMNT, "ForStatement", info);
+    };
+
+    public accept(visitor: TreeVisitor): void {
+      visitor.visitForStmnt(this);
+    };
+  };
+
+  export class WhileStatementNode extends BaseNodeAST {
+    public condition: BaseNodeAST;
+    public block: BlockNode;
+
+    constructor(info: LinePosition) {
+      super(NodeIdentifiers.N_WHILE_STMNT, "WhileStatement", info);
+    };
+    
+    public accept(visitor: TreeVisitor): void {
+      visitor.visitWhileStmnt(this);
+    };
+  };
+
+  export class CaseStatementTestNode extends BaseNodeAST {
+    public isDefault: boolean;
+    public condition: BaseNodeAST | null;
+    public block: BlockNode;
+  
+    constructor(info: LinePosition) {
+      super(NodeIdentifiers.N_CASE_TEST, "CaseTest", info);
+      this.isDefault = false;
+      this.condition = null;
+    };
+
+    public accept(visitor: TreeVisitor): void {
+    };
+  };
+
+  export class CaseStatementNode extends BaseNodeAST {
+    public discriminant: BaseNodeAST;
+    public tests: CaseStatementTestNode[];
+
+    constructor(info: LinePosition) {
+      super(NodeIdentifiers.N_CASE_STMNT, "CaseStatement", info);
+      this.tests = [];
+    };
+
+    public accept(visitor: TreeVisitor): void {
+      visitor.visitCaseStmnt(this);   
     };
   };
 
