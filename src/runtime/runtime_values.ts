@@ -1,6 +1,7 @@
 import { DataType } from "../common";
 import { GolosinaRuntimeError } from "../exceptions";
 import type { SyntaxTree } from "../frontend/ast"
+import GolosinaDataStructures from "./native/data_structures";
 
 export enum RuntimeValueID {
   RID_OBJ,
@@ -57,7 +58,7 @@ export namespace RuntimeValues {
   export class MethodNative extends Value {
     public id: RuntimeValueID.RID_METHOD_NATIVE;
     public paramState: ParamState;
-    public exec: (params: any[]) => any;
+    public exec: (...params: any[]) => any;
 
     constructor(exec: (...params: any[]) => any, state: ParamState = ParamState.FIXED) {
       super();
@@ -124,7 +125,7 @@ export namespace RuntimeValues {
 };
 
 export namespace RuntimeObjects {
-  export type TypeValue = boolean | string | number | null;
+  export type TypeValue = boolean | string | number | any[] | null; 
 
   export class ValueObject extends RuntimeValues.Object {
     public typename: string;
@@ -160,10 +161,36 @@ export namespace RuntimeObjects {
     public isNull(): this is NullObject {
       return this.dataType === DataType.T_NULL;
     };
+
+    public isContainer(): this is ContainerObject {
+      return this.dataType === DataType.T_OBJECT && this instanceof ContainerObject;
+    };
+  };
+
+  /*
+    Non primitive value, can construct different datastructures with this.
+  */
+
+  export class ContainerObject extends ValueObject {
+    public value: any[];
+
+    constructor() {
+      super(DataType.T_OBJECT, "Container");
+      this.value = [];
+      this.addUtil();
+    };
+
+    private addUtil() {
+      this.members.set("length", new RuntimeValues.MethodNative(() => {
+        return this.value.length;
+      }))
+    };
+    
   };
 
   export class NullObject extends ValueObject {
     public value: null;
+    
     constructor() {
       super(DataType.T_NULL, "null");
       this.value = null;
@@ -172,6 +199,7 @@ export namespace RuntimeObjects {
 
   export class BooleanObject extends ValueObject {
     public value: boolean;
+    
     constructor(value: boolean) {
       super(DataType.T_BOOLEAN, "boolean");
       this.value = value;
@@ -180,10 +208,26 @@ export namespace RuntimeObjects {
 
   export class StringObject extends ValueObject {
     public value: string;
+    
     constructor(value: string) {
       super(DataType.T_STRING, "string");
       this.value = value;
+      this.addUtils();
     };
+
+    private addUtils() {
+      this.members.set("includes", new RuntimeValues.MethodNative((inc: RuntimeObjects.StringObject) => {
+        return this.value.includes(inc.value);
+      }));
+
+      this.members.set("length", new RuntimeValues.MethodNative(() => {
+        return this.value.length;
+      }));
+
+      this.members.set("split", new RuntimeValues.MethodNative((at: RuntimeObjects.StringObject) => {
+        return this.value.split(at.value);
+      }));
+     };
   };
 
   export class NumericObject extends ValueObject {

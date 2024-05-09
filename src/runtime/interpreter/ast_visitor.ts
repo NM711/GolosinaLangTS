@@ -10,19 +10,18 @@ import { SyntaxTree } from "../../frontend/ast";
 import { RuntimeValues, RuntimeObjects, ParamState } from "../runtime_values"
 import { ScopeIdentifier } from "../environment";
 import { GolosinaRuntimeError } from "../../exceptions";
+import GolosinaDataStructures from "../native/data_structures";
 
 class Stack {
   private frames: RuntimeValues.Value[][];
   public frame: RuntimeValues.Value[];
-  
+
   constructor() {
     // we init the frame and push the frame that pertains to the global execution environment.
     this.frames = [[]];
     this.frame = this.frames[0];
   };
 
-
-  
   private updateFrame() {
     this.frame = this.frames[this.frames.length - 1];
   };
@@ -66,7 +65,7 @@ class ASTVisitor extends AbstractVisitor {
 
   private initNative() {
     const native = new NativeObjects();
-    this.environment.declare("vector", native.getVector);
+    this.environment.declare("containers", native.getContainers);
     this.environment.declare("fmt", native.getFmt);
     this.environment.declare("os", native.getOS);
     this.environment.declare("Object", new RuntimeValues.Object());
@@ -79,10 +78,21 @@ class ASTVisitor extends AbstractVisitor {
 
       case "boolean":
         return new RuntimeObjects.BooleanObject(value);
-      
+
+      case "object":
+        if (RuntimeValueTypeGuard.isObject(value)) {
+          return value;
+        } else if (value.constructor === Array) {
+          const vector = new GolosinaDataStructures.Vector();
+          vector.setElements = value;
+          return vector.retreive;
+        } else {
+          return new RuntimeObjects.NullObject();
+        };
+
       case "number":
         return (Number.isInteger(value)) ? new RuntimeObjects.IntegerObject(value) : new RuntimeObjects.FloatObject(value);
-        
+
       case "undefined":
         return new RuntimeObjects.NullObject();
 
@@ -93,7 +103,7 @@ class ASTVisitor extends AbstractVisitor {
   };
 
   private handleNativeMethodCall(node: SyntaxTree.ExpressionCallNode, nativeMethod: RuntimeValues.MethodNative) {
-    if (nativeMethod.paramState === ParamState.FIXED) {
+    if (nativeMethod.paramState === ParamState.FIXED) {      
       this.tc.checkArgLengthMatch({
         info: node.callee.info,
         ident: this.meta.getSymbol,
@@ -103,24 +113,33 @@ class ASTVisitor extends AbstractVisitor {
     };
 
     const runtimeArgs: RuntimeValues.Object[] = []
-    
-    
+
     for (const arg of node.arguments) {
       arg.accept(this);
       const value = this.stack.popValue();
 
+      if (value === undefined) {
+        console.log(value, arg)
+      }
+      
       if (!RuntimeValueTypeGuard.isObject(value)) {
         throw new GolosinaRuntimeError(`Arguments passed to a method call is of invalid object type value!`, arg.info);
       };
 
-      runtimeArgs.push(value);      
+      runtimeArgs.push(value);
     };
 
-    const value = nativeMethod.exec(runtimeArgs);
-   
+    const value = nativeMethod.exec(...runtimeArgs);
+
+    // if the native fn returns something other than undefined, we tell the dispatcher at the end of execution that this is supposed to return something.
+
+    if (value) {
+      this.meta.setDispatchID = DispatchID.RETURN;
+    };
+    
     // we need to convert native v8 values into a representation we can read in golosina.
     const newObject = this.convertV8ValueToGolosinaObj(value);
-    this.stack.pushValue(newObject);  
+    this.stack.pushValue(newObject);
   };
 
   private handleMethodCall(node: SyntaxTree.ExpressionCallNode, method: RuntimeValues.Method) {
@@ -134,7 +153,7 @@ class ASTVisitor extends AbstractVisitor {
     this.environment.pushScope(ScopeIdentifier.S_METHOD);
     // inject ref to current object
     this.environment.declare("this", this.context);
-    
+
     for (let i = 0; i < method.params.length; ++i) {
       const arg = node.arguments[i];
       const param = method.params[i];
@@ -476,20 +495,20 @@ class ASTVisitor extends AbstractVisitor {
     node.discriminant.accept(this);
 
     const discriminant = this.stack.popValue() as RuntimeObjects.ValueObject;
-    
+
     for (const test of node.tests) {
       if (!test.isDefault && test.condition) {
         test.condition.accept(this);
         const expr = this.stack.popValue() as RuntimeObjects.ValueObject;
-        
+
         if ((expr && discriminant) && expr.value === discriminant.value) {
           test.block.accept(this);
         };
-        
+
       } else {
         test.block.accept(this);
       };
-      
+
       if (this.meta.getDispatchID === DispatchID.BREAK) {
         this.meta.resetDispatchID();
         break;
@@ -526,7 +545,7 @@ class ASTVisitor extends AbstractVisitor {
       if (this.meta.getDispatchID === DispatchID.CONTINUE || this.meta.getDispatchID === DispatchID.NONE) {
         node.update.accept(this);
       };
-      
+
       if (this.meta.getDispatchID === DispatchID.BREAK) {
         this.meta.resetDispatchID();
         break;
@@ -551,7 +570,7 @@ class ASTVisitor extends AbstractVisitor {
       };
 
       node.block.accept(this);
-      
+
       if (this.meta.getDispatchID === DispatchID.BREAK) {
         this.meta.resetDispatchID();
         break;
@@ -584,7 +603,7 @@ class ASTVisitor extends AbstractVisitor {
 
       if (this.meta.getDispatchID !== DispatchID.NONE) {
         break;
-      };     
+      };
 
       stmnt.accept(this);
     };

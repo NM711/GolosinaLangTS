@@ -4,14 +4,14 @@ const x = clone Object {
 	number = 10,
 	another = "Hello",
 	callme = method () {
-		let x = 10;
-		x;
+		let x = 500;
+		return x;
 	}
 };
 
-let y = x->callme();
+# let y = x->callme();
 
-fmt->log(y);
+# fmt->log(y);
 
 const operation = clone Object {
 	loop = method () {
@@ -32,37 +32,35 @@ const operation = clone Object {
 			};
 		};
 	},
-	vec1 = vector,
+	vec1 = containers->vector(10),
 	populate = method () {
-		fmt->print(this);
 		this->vec1->push(123);	
 	}
 };
 
-const result = operation->loop();
+# const result = operation->loop();
 
-fmt->log("Loop Result: ", result);
+# fmt->log("Loop Result: ", result);
 
 operation->populate();
 
-# fmt->log(operation->vec1->get());
+fmt->log(operation->vec1);
 
+# const greet = "Hallo";
 
-const greet = "Hallo";
-
-case (greet) {
-	of "hi" {
-		fmt->log("is in hi!");
-		break;
-	}
-
-	of "hello" {
-		fmt->log("is in hello");
-		break;
-	}
-	
-	default {
-		fmt->log("Is Default Test!");
-		return 10;
-	}
-};
+# case (greet) {
+#	of "hi" {
+#		fmt->log("is in hi!");
+#		break;
+#	}
+#
+#	of "hello" {
+#		fmt->log("is in hello");
+#		break;
+#	}
+#	
+#	default {
+#		fmt->log("Is Default Test!");
+#		return 10;
+#	}
+# };

@@ -260,7 +260,7 @@ export namespace SyntaxTree {
   };
 
   export class CloneStatementNode extends BaseNodeAST {
-    public cloning: IdentfierNode;
+    public cloning: IdentfierNode | MemberExpressionNode;
     public object: ObjectExpressionNode;
 
     constructor(info: LinePosition) {

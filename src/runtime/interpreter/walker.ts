@@ -1,5 +1,6 @@
 import ASTVisitor from "./ast_visitor";
 import type { SyntaxTree } from "../../frontend/ast";
+import { GolosinaRuntimeError, GolosinaTypeError } from "../../exceptions";
 
 
 /*
@@ -21,8 +22,24 @@ class Walker {
   };
 
   public execute() {
+    
+    
     for (const node of this.source) {
+      try {
       node.accept(this.visitor);
+        
+      } catch (e) {
+        if (e instanceof GolosinaRuntimeError) {
+          console.error(e.name, e.message);
+        } else if (e instanceof GolosinaTypeError) {
+          console.error(e.name, e.message);
+        } else {
+          console.error("GolosinaRuntimeError: Program unexpectedly panicked!\n");
+          console.log(e)
+        };
+        
+        process.exit(1);
+      };
     };
   }; 
 };

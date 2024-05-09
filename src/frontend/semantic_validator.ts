@@ -6,7 +6,7 @@ import { NodeIdentifiers, SyntaxTree } from "./ast";
 class Expect {
 
   private error(expected: string, received: string, info: LinePosition) {
-    return new GolosinaSyntaxError(`Expected "${expected}" instead received "${received}"`, info);
+    return new GolosinaSyntaxError(`Expected "${expected}" instead received "${received}"!`, info);
   };
 
   public token(id: TokenIdentifiers, lexeme: string, received: Token) {
@@ -148,7 +148,7 @@ class SemanticValidator {
     This is a helper which can be used in order to validate assignment, initializers, returns, etc.
   */
 
-  private isInvalidValue(node: SyntaxTree.BaseNodeAST): boolean {
+  private isInvalidNode(node: SyntaxTree.BaseNodeAST): boolean {
     return !TreeNodeTypeGuard.isCloneStmnt(node) &&
       !TreeNodeTypeGuard.isIdent(node) &&
       !TreeNodeTypeGuard.isLiteral(node) &&
@@ -162,12 +162,12 @@ class SemanticValidator {
 
     if (!isMember) {
       
-      if (this.isInvalidValue(node)) {
+      if (this.isInvalidNode(node)) {
         throw new GolosinaSyntaxError(`Unexpected rhs value within assignment expression!`, node.info)
       };
 
     } else {
-      if (this.isInvalidValue(node) && !TreeNodeTypeGuard.isMethod(node)) {
+      if (this.isInvalidNode(node) && !TreeNodeTypeGuard.isMethod(node)) {
         throw new GolosinaSyntaxError(`Unexpected rhs value within direct member assignment expression!`, node.info)
       };
       
@@ -184,9 +184,9 @@ class SemanticValidator {
     return node;
   };
 
-  public validateCallLHS(node: SyntaxTree.BaseNodeAST): SyntaxTree.IdentfierNode | SyntaxTree.MemberExpressionNode {
+  public validateCallExprCallee(node: SyntaxTree.BaseNodeAST): SyntaxTree.IdentfierNode | SyntaxTree.MemberExpressionNode {
     if (!TreeNodeTypeGuard.isIdent(node) && !TreeNodeTypeGuard.isMemberExpr(node)) {
-      throw new GolosinaSyntaxError(`Invalid lhs value present within call expression!`, node.info);
+      throw new GolosinaSyntaxError(`Invalid callee present within "call" expression!`, node.info);
     };
 
     return node;
@@ -195,7 +195,7 @@ class SemanticValidator {
 
 
   public validateVarInit(node: SyntaxTree.BaseNodeAST): SyntaxTree.BaseNodeAST {
-    if (this.isInvalidValue(node)) {
+    if (this.isInvalidNode(node)) {
       throw new GolosinaSyntaxError(`Unexpected value within a variable initializer!`, node.info)
     };
 
@@ -203,24 +203,31 @@ class SemanticValidator {
   };
   
   public validateReturn(node: SyntaxTree.BaseNodeAST) {
-    if (this.isInvalidValue(node)) {
-      throw new GolosinaSyntaxError(`Unexpected value within return statement!`, node.info);
-    };
-  };
-
-  private isInvalidExpression(node: SyntaxTree.BaseNodeAST): boolean {
-    return !TreeNodeTypeGuard.isIdent(node) && !TreeNodeTypeGuard.isBinaryExpr(node) && !TreeNodeTypeGuard.isLiteral(node) && !TreeNodeTypeGuard.isUnaryExpr(node)
-  };
-
-  public validateConditionExpression(node: SyntaxTree.BaseNodeAST): SyntaxTree.BaseNodeAST {
-    if (this.isInvalidExpression(node)) {
-      throw new GolosinaSyntaxError(`Invalid expression present in if statement condition!`, node.info);
+    if (this.isInvalidNode(node)) {
+      throw new GolosinaSyntaxError(`Unexpected value within "return" statement!`, node.info);
     };
 
     return node;
   };
 
-  public validateArguments(node: SyntaxTree.BaseNodeAST) {
+  private isInvalidExpression(node: SyntaxTree.BaseNodeAST): boolean {
+    return !TreeNodeTypeGuard.isIdent(node) &&
+           !TreeNodeTypeGuard.isMemberExpr(node) &&
+           !TreeNodeTypeGuard.isBinaryExpr(node) &&
+           !TreeNodeTypeGuard.isLiteral(node) &&
+           !TreeNodeTypeGuard.isUnaryExpr(node) &&
+           !TreeNodeTypeGuard.isCallExpr(node)
+  };
+
+  public validateConditionExpression(node: SyntaxTree.BaseNodeAST): SyntaxTree.BaseNodeAST {
+    if (this.isInvalidExpression(node)) {
+      throw new GolosinaSyntaxError(`Invalid expression present in condition!`, node.info);
+    };
+
+    return node;
+  };
+
+  public validateArgument(node: SyntaxTree.BaseNodeAST) {
     if (!TreeNodeTypeGuard.isIdent(node) && !TreeNodeTypeGuard.isLiteral(node) && !TreeNodeTypeGuard.isMemberExpr(node) && !TreeNodeTypeGuard.isCallExpr(node)) {
       throw new GolosinaSyntaxError(`Invalid argument value has been set!`, node.info);
     };

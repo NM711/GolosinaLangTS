@@ -69,11 +69,7 @@ class Parser {
 
   private parseReturn(): SyntaxTree.ReturnStatementNode {
     this.eat();
-    const returned = new SyntaxTree.ReturnStatementNode(this.look.info, this.parse());
-
-    if (!TreeNodeTypeGuard.isLiteral(returned.value) && !TreeNodeTypeGuard.isIdent(returned.value) && !TreeNodeTypeGuard.isCloneStmnt(returned.value)) {
-      throw new GolosinaSyntaxError(`Unexpected value in return statement at "${this.look.lexeme}"!`, this.look.info);
-    };
+    const returned = new SyntaxTree.ReturnStatementNode(this.look.info, this.validator.validateReturn(this.parse()));
 
     return returned;
   };
@@ -252,22 +248,22 @@ class Parser {
   };
 
   private parseMethod(): SyntaxTree.BaseNodeAST {
-    const fn = new SyntaxTree.MethodNode(this.look.info);
+    const method = new SyntaxTree.MethodNode(this.look.info);
     this.eat();
 
     this.validator.expect.leftParenthesis(this.look);
     this.eat();
     
     if (!this.validator.tokenConditions.isRightParenthesis(this.look)) {
-      this.parseParams(fn.params);
+      this.parseParams(method.params);
     };
 
     this.validator.expect.rightParenthesis(this.look);
     this.eat();
 
-    fn.block = this.parseBlock();
+    method.block = this.parseBlock();
 
-    return fn;
+    return method;
   };
 
   private parseVar(): SyntaxTree.BaseNodeAST {
@@ -338,8 +334,7 @@ class Parser {
     const cloningExpr = new SyntaxTree.CloneStatementNode(this.look.info);
     this.eat();
 
-    cloningExpr.cloning = this.validator.expect.ident(this.parsePrimary(), "Clone Object Identifier");
-    this.eat();
+    cloningExpr.cloning = this.validator.expect.memberOrIdent(this.parse(), "Clone Object Identifier");
 
     cloningExpr.object = this.parseObjectExpr();
 
@@ -348,7 +343,7 @@ class Parser {
 
   private parseArguments(args: SyntaxTree.BaseNodeAST[]) {
     while (true) {
-      const arg = this.validator.validateArguments(this.parse());
+      const arg = this.validator.validateArgument(this.parse());
 
       args.push(arg);
 
@@ -363,8 +358,6 @@ class Parser {
       this.validator.expect.seperator(this.look);
       this.eat();
     };
-
-    return args;
   };
 
   private parseMemberExpr(): SyntaxTree.BaseNodeAST {
@@ -396,7 +389,7 @@ class Parser {
       const call = new SyntaxTree.ExpressionCallNode(this.look.info);
       this.eat();
 
-      call.callee = this.validator.validateCallLHS(lhs);
+      call.callee = this.validator.validateCallExprCallee(lhs);
 
       // parse arguments
 

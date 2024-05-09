@@ -37,15 +37,17 @@ class GolosinaTypeChecker {
       throw new GolosinaTypeError(`Unexpected values near operand "${op}" in arithmetic expression!`, left.info);
     };
 
-    if ((left.value.isString() && right.value.isString()) && op !== "+") {
+    const stringSafeOperators = new Set(["+", "==", "!=", ">", "<", ">=", "<="])
+
+    if (((left.value.isString() && right.value.isString())) && !stringSafeOperators.has(op)) {
       throw new GolosinaTypeError(`Attempted to perform string concatenation with invalid operand "${op}"`, left.info);
     };
 
     if ((left.value.isString() && !right.value.isString()) ||(!left.value.isString() && right.value.isString())) {
-      throw new GolosinaTypeError(`Unsopported object types on near operand "${op}": "${left.value.typename}" and "${right.value.typename}"`, left.info);
+      throw new GolosinaTypeError(`Unsupported object types on near operand "${op}": "${left.value.typename}" and "${right.value.typename}"`, left.info);
     } else if (!left.value.isString() && !right.value.isString()) {
       if (left.value.isNumeric() !== right.value.isNumeric()) {
-        throw new GolosinaTypeError(`Unsopported object types near operand "${op}": "${left.value.typename}" and "${right.value.typename}"`, left.info);
+        throw new GolosinaTypeError(`Unsupported object types near operand "${op}": "${left.value.typename}" and "${right.value.typename}"`, left.info);
       };
     };
 

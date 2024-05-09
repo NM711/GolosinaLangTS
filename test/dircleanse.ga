@@ -1,0 +1,38 @@
+const CleanerUtils = clone Object {
+	concatFile = method (base, fileName) {
+		return base + "/" + fileName;
+	}
+};
+
+const DirectoryCleaner = clone Object {
+
+	utils = CleanerUtils,
+	
+	cleanseFiles = method (base, destination, extension) {
+		fmt->print("Looking for files of extension: ", extension);
+		
+		const dirData = os->readDir(base, "utf-8");
+
+		for (let i = 0; i < dirData->length(); ++i) {
+			const file = dirData->at(i);
+
+			const fileSplit = file->split(".");
+			
+			if (fileSplit->length() < 1) {
+				continue;	
+			};
+			
+			const fileExtension = fileSplit->pop();
+			
+			const from = this->utils->concatFile(base, file);
+			const to = this->utils->concatFile(destination, file);
+			
+			if (fileExtension == extension) {
+				os->updateFilePath(from, to);
+				fmt->log("Successfully moved: ", file, " to ", destination, "!");
+			};
+		};
+	}
+};
+
+DirectoryCleaner->cleanseFiles("/home/user/Documents", "/home/user/Documents/PDF", "pdf");

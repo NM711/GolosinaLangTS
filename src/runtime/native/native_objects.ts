@@ -1,163 +1,162 @@
 import fs from "node:fs"
-import { ParamState, RuntimeValues } from "../runtime_values";
+import { ParamState, RuntimeObjects, RuntimeValues } from "../runtime_values";
 import RuntimeValueTypeGuard from "../../guards/runtime_value_guards";
+import GolosinaDataStructures from "./data_structures";
 
-class NativeFMT {
+namespace NativeModules {
 
-  private fmt: RuntimeValues.Object;
+  export class FMT {
 
-  constructor() {
-    this.fmt = new RuntimeValues.Object(null);
-  };
+    private object: RuntimeValues.Object;
 
-  private format(toLog: RuntimeValues.Object | null) {
-    if (toLog) {
-      const members = [];
-
-      for (const [key, value] of toLog.members) {
-        members.push({
-          [key]: value.constructor.name
-        });
-      };
-      
-      return {
-        prototype: this.format(toLog.prototype),
-        members
-      };
+    constructor() {
+      this.object = new RuntimeValues.Object(null);
     };
 
-    return null;
-  };
+    private format(toLog: RuntimeValues.Object | null) {
+      if (toLog) {
+        const members: { [key: string]: string }[] = [];
 
-  private addLog(): void {
-    this.fmt.members.set("log", new RuntimeValues.MethodNative((log: RuntimeValues.Object[]) => {
+        for (const [key, value] of toLog.members) {
+          members.push({
+            [key]: value.constructor.name
+          });
+        };
 
-      for (const toLog of log) {
         if (RuntimeValueTypeGuard.isObjectValue(toLog)) {
-          process.stdout.write(`${toLog.value}\s`);
-        } else if (RuntimeValueTypeGuard.isObject(toLog)) {
-          process.stdout.write(JSON.stringify(this.format(toLog), null, 2));
+
+          return {
+            prototype: this.format(toLog.prototype),
+            members,
+            value: toLog.value
+          };
+
+        } else {
+          return {
+            prototype: this.format(toLog.prototype),
+            members
+          };
         };
       };
 
-      process.stdout.write("\n");
+      return null;
+    };
 
-      const date = new Date();
-      console.log(`Date: ${date.getFullYear()}-${date.getMonth()}-${date.getDay()},`, `Time: ${date.getHours()}:${date.getMinutes()}:${date.getSeconds()}`);
-    },
-      ParamState.ARRAY
-    ));
-  };
+    private writeObject(toLog: RuntimeValues.Object) {
+      if (RuntimeValueTypeGuard.isObjectValue(toLog)) {
 
-  private addPrint(): void {
-    this.fmt.members.set("print", new RuntimeValues.MethodNative((log: RuntimeValues.Object[]) => {
-      for (const toLog of log) {
-        if (RuntimeValueTypeGuard.isObjectValue(toLog)) {
-          process.stdout.write(`${toLog.value}\s`);
-        } else if (RuntimeValueTypeGuard.isObject(toLog)) {
-
-          process.stdout.write(JSON.stringify(this.format(toLog), null, 2));
+        if (toLog.isContainer()) {
+          process.stdout.write(JSON.stringify(toLog.value, null, 2))
+        } else {
+          process.stdout.write(`${toLog.value} `);
         };
-      };
+        
+      } else {
+        process.stdout.write(JSON.stringify(this.format(toLog), null, 2));
+      }
+    };
+    
+    private addLog(): void {
+      this.object.members.set("log", new RuntimeValues.MethodNative((...log: RuntimeValues.Object[]) => {
+        for (const toLog of log) {
+          this.writeObject(toLog);
+        };
 
-      process.stdout.write("\n");
-    },
-      ParamState.ARRAY
-    ));
+        process.stdout.write("\n");
+
+        const date = new Date();
+        console.log(`Date: ${date.getFullYear()}-${date.getMonth()}-${date.getDay()},`, `Time: ${date.getHours()}:${date.getMinutes()}:${date.getSeconds()}`);
+      },
+        ParamState.ARRAY
+      ));
+    };
+
+    private addPrint(): void {
+      this.object.members.set("print", new RuntimeValues.MethodNative((...log: RuntimeValues.Object[]) => {
+        for (const toLog of log) {
+          this.writeObject(toLog);
+        };
+
+        process.stdout.write("\n");
+      },
+        ParamState.ARRAY
+      ));
+    };
+
+    public get retrieve() {
+      this.addLog();
+      this.addPrint();
+      return this.object;
+    };
   };
 
-  public get retrieve() {
-    this.addLog();
-    this.addPrint();
-    return this.fmt;
-  };
-};
+  export class OS {
+    private object: RuntimeValues.Object;
 
-class NativeOS {
-  private os: RuntimeValues.Object;
+    constructor() {
+      this.object = new RuntimeValues.Object();
+    };
 
-  constructor() {
-    this.os = new RuntimeValues.Object();
-  };
+    private addReadFile() {
+      this.object.members.set("readFile", new RuntimeValues.MethodNative((path: RuntimeObjects.StringObject, encoding: RuntimeObjects.StringObject) => {
+        return fs.readFileSync(path.value, encoding.value as BufferEncoding);
+      }
+      ));
+    };
 
-  private addReadFile() {
-    this.os.members.set("readFile", new RuntimeValues.MethodNative((path: string, encoding: BufferEncoding) => {
-      return fs.readFileSync(path, encoding);
-    }
-    ));
-  };
+    private addUpdateFilePath() {
+      this.object.members.set("updateFilePath", new RuntimeValues.MethodNative((oldPath: RuntimeObjects.StringObject, newPath: RuntimeObjects.StringObject) => {
+        fs.renameSync(oldPath.value, newPath.value);
+      }))
+    };
 
-  private addReadDirectory() {
-    this.os.members.set("readDir", new RuntimeValues.MethodNative((path: string, encoding: BufferEncoding) => {
-      return fs.readdirSync(path, encoding);
-    }
-    ));
-  };
+    private addReadDirectory() {
+      this.object.members.set("readDir", new RuntimeValues.MethodNative((path: RuntimeObjects.StringObject, encoding: RuntimeObjects.StringObject) => {
+        return fs.readdirSync(path.value, encoding.value as BufferEncoding);
+      }
+      ));
+    };
 
-  public get retreive() {
-    this.addReadFile();
-    this.addReadDirectory();
-    return this.os;
-  };
-};
-
-
-class NativeVector {
-  private vector: RuntimeValues.Object;
-  private value: any[];
-
-  constructor() {
-    this.vector = new RuntimeValues.Object();
-    this.value = [];
+    public get retreive() {
+      this.addReadFile();
+      this.addReadDirectory();
+      this.addUpdateFilePath();
+      return this.object;
+    };
   };
 
-  public addPush() {
-    this.vector.members.set("push", new RuntimeValues.MethodNative((element: any) => {
-      this.value.push(element);
-    }
-    ));
+  /**
+    Native data structure module
+  */
+
+  export class Containers {
+    private object: RuntimeValues.Object;
+
+    constructor() {
+      this.object = new RuntimeValues.Object();
+    };
+
+    private addVector() {
+      this.object.members.set("vector", new RuntimeValues.MethodNative((elements: any[]) => {
+        const vec = new GolosinaDataStructures.Vector();
+
+        if (elements.length > 0) {
+          vec.setElements = elements;
+        };
+
+        return vec.retreive;
+      },
+        ParamState.ARRAY
+      ));
+    };
+
+    public get retrieve() {
+      this.addVector();
+      return this.object;
+    };
   };
 
-  public addPop() {
-    this.vector.members.set("pop", new RuntimeValues.MethodNative(() => {
-      return this.value.pop();
-    }
-    ));
-  };
 
-  public addAt() {
-    this.vector.members.set("at", new RuntimeValues.MethodNative((index: number) => {
-      return this.value.at(index);
-    }
-    ));
-
-  };
-
-  public addGet() {
-    this.vector.members.set("get", new RuntimeValues.MethodNative(() => {
-      return this.value;
-    }
-    ));
-
-  };
-
-  public addElements() {
-    this.vector.members.set("elements", new RuntimeValues.MethodNative((elements: any[]) => {
-      this.value = elements;
-    },
-      ParamState.ARRAY
-    ));
-  };
-
-  public get retreive() {
-    this.addElements();
-    this.addAt();
-    this.addGet();
-    this.addPop();
-    this.addPush();
-
-    return this.vector;
-  };
 };
 
 /**
@@ -166,15 +165,15 @@ class NativeVector {
 
 class NativeObjects {
   public get getFmt() {
-    return new NativeFMT().retrieve;
+    return new NativeModules.FMT().retrieve;
   };
 
   public get getOS() {
-    return new NativeOS().retreive;
+    return new NativeModules.OS().retreive;
   };
 
-  public get getVector() {
-    return new NativeVector().retreive;
+  public get getContainers() {
+    return new NativeModules.Containers().retrieve;
   };
 };
 

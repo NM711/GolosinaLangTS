@@ -205,16 +205,19 @@ class Lexer {
 
   private handleString(): void {
     let str: string = "";
-    
     this.eat();
+    
     while (this.input.length > 0) {
-      str += this.peek()
-      this.eat();
       if (this.peek() == "\"") {
         this.eat();
         break;
       };
+      
+      str += this.peek()
+      this.eat();
     };
+
+    console.log(str)
 
     this.pushToken(str, TokenIdentifiers.STRING_LITERAL);
   };
