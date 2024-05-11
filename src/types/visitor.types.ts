@@ -1,4 +1,4 @@
-import { SyntaxTree } from "../frontend/ast";
+import { SyntaxTree } from "../frontend/parser/ast";
 
 
 export abstract class AbstractVisitor {
@@ -15,9 +15,9 @@ export abstract class AbstractVisitor {
   public abstract visitCaseStmnt(node: SyntaxTree.CaseStatementNode): void;
   public abstract visitBreakStmnt(): void;
   public abstract visitContinueStmnt(): void;
-  public abstract visitMethod(node: SyntaxTree.MethodNode): void;
+  public abstract visitMethodExpr(node: SyntaxTree.MethodExpressionNode): void;
   public abstract visitCallExpr(node: SyntaxTree.ExpressionCallNode): void;
-  public abstract visitCloneStmnt(node: SyntaxTree.CloneStatementNode): void;
+  public abstract visitCloneExpr(node: SyntaxTree.CloneExpressionNode): void;
   public abstract visitMemberExpr(node: SyntaxTree.MemberExpressionNode): void;
   public abstract visitVar(node: SyntaxTree.VariableNode): void;
 };

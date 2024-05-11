@@ -1,4 +1,4 @@
-import Environment from "../environment";
+import Environment from "./environment";
 import GolosinaTypeChecker from "./typechecker";
 import AbstractVisitor from "../../types/visitor.types";
 import NativeObjects from "../native/native_objects"
@@ -6,10 +6,10 @@ import MetaData, { DispatchID } from "./meta";
 import TreeNodeTypeGuard from "../../guards/node_gurads";
 import RuntimeValueTypeGuard from "../../guards/runtime_value_guards";
 import { DataType } from "../../common";
-import { SyntaxTree } from "../../frontend/ast";
-import { RuntimeValues, RuntimeObjects, ParamState } from "../runtime_values"
-import { ScopeIdentifier } from "../environment";
-import { GolosinaRuntimeError } from "../../exceptions";
+import { SyntaxTree } from "../../frontend/parser/ast";
+import { RuntimeValues, RuntimeObjects, ParamState } from "./runtime_values"
+import { ScopeIdentifier } from "./environment";
+import GolosinaExceptions from "../../errors/exceptions";
 import GolosinaDataStructures from "../native/data_structures";
 
 class Stack {
@@ -123,7 +123,7 @@ class ASTVisitor extends AbstractVisitor {
       }
       
       if (!RuntimeValueTypeGuard.isObject(value)) {
-        throw new GolosinaRuntimeError(`Arguments passed to a method call is of invalid object type value!`, arg.info);
+        throw new GolosinaExceptions.Runtime.RuntimeError(`Arguments passed to a method call is of invalid object type value!`, arg.info);
       };
 
       runtimeArgs.push(value);
@@ -376,7 +376,7 @@ class ASTVisitor extends AbstractVisitor {
     this.stack.pushValue(retrieved);
   };
 
-  public override visitCloneStmnt(node: SyntaxTree.CloneStatementNode) {
+  public override visitCloneExpr(node: SyntaxTree.CloneExpressionNode) {
     node.cloning.accept(this);
     const resolvedPrototype = this.stack.popValue();
 
@@ -486,7 +486,7 @@ class ASTVisitor extends AbstractVisitor {
     this.environment.declare(node.ident.name, runtimeVariable);
   };
 
-  public override visitMethod(node: SyntaxTree.MethodNode) {
+  public override visitMethodExpr(node: SyntaxTree.MethodExpressionNode) {
     const method = new RuntimeValues.Method(node.block, node.params);
     this.stack.pushValue(method);
   };

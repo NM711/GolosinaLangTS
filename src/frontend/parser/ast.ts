@@ -1,6 +1,6 @@
-import { DataType } from "../common";
-import { LinePosition } from "../types/token.types";
-import TreeVisitor from "../types/visitor.types"
+import { DataType } from "../../common";
+import { TokenInformation } from "../lexer/token"
+import TreeVisitor from "../../types/visitor.types"
 
 export enum NodeIdentifiers {
   N_BINARY_EXPR,
@@ -15,13 +15,13 @@ export enum NodeIdentifiers {
   N_CASE_TEST,
   N_CASE_STMNT,
   N_RETURN_STMNT,
-  N_CLONE_STMNT,
+  N_CLONE_EXPR,
   N_BREAK_STMNT,
   N_CONTINUE_STMNT,
   N_MODULE,
   N_IDENT,
   N_LITERAL,
-  N_METHOD,
+  N_METHOD_EXPR,
   N_VARIABLE,
   N_DATA_TYPE,
   N_OBJECT_EXPR,
@@ -34,9 +34,9 @@ export namespace SyntaxTree {
   export abstract class BaseNodeAST {
     public id: NodeIdentifiers;
     public kind: string;
-    public info: LinePosition;
+    public info: TokenInformation;
     
-    constructor(id: NodeIdentifiers, kind: string, info: LinePosition) {
+    constructor(id: NodeIdentifiers, kind: string, info: TokenInformation) {
       this.id = id;
       this.kind = kind;
       this.info = info;
@@ -52,7 +52,7 @@ export namespace SyntaxTree {
     public op: string;
     public rhs: BaseNodeAST;
 
-    constructor(kind: string = "BinaryExpression", info: LinePosition) {
+    constructor(kind: string = "BinaryExpression", info: TokenInformation) {
       super(NodeIdentifiers.N_BINARY_EXPR, kind, info);
     };
 
@@ -66,7 +66,7 @@ export namespace SyntaxTree {
     public op: string;
     public isPrefix: boolean;
 
-    constructor(info: LinePosition) {
+    constructor(info: TokenInformation) {
       super(NodeIdentifiers.N_UNARY_EXPR, "UnaryExpression", info);
       this.isPrefix = false;
     };
@@ -82,7 +82,7 @@ export namespace SyntaxTree {
     public op: string;
     public rhs: BaseNodeAST;
 
-    constructor(info: LinePosition) {
+    constructor(info: TokenInformation) {
       super(NodeIdentifiers.N_BINARY_ASSIGN_EXPR, "AssignmentExpression", info);
     };
 
@@ -96,7 +96,7 @@ export namespace SyntaxTree {
     public value: string;
     public type: DataType;
 
-    constructor(value: string, type: DataType, info: LinePosition) {
+    constructor(value: string, type: DataType, info: TokenInformation) {
       super(NodeIdentifiers.N_LITERAL, "Literal", info);
       this.value = value;
       this.type = type;
@@ -110,7 +110,7 @@ export namespace SyntaxTree {
   export class IdentfierNode extends BaseNodeAST {
     public name: string;
 
-    constructor(name: string, info: LinePosition) {
+    constructor(name: string, info: TokenInformation) {
       super(NodeIdentifiers.N_IDENT, "Identifier", info);
       this.name = name;
     };
@@ -125,7 +125,7 @@ export namespace SyntaxTree {
     public ident: IdentfierNode;
     public init: BaseNodeAST | null;
 
-    constructor(info: LinePosition) {
+    constructor(info: TokenInformation) {
       super(NodeIdentifiers.N_VARIABLE, "Variable", info);
       this.isConst = false;
       this.init = null;
@@ -140,7 +140,7 @@ export namespace SyntaxTree {
   export class BlockNode extends BaseNodeAST {
     public body: BaseNodeAST[];
 
-    constructor(info: LinePosition) {
+    constructor(info: TokenInformation) {
       super(NodeIdentifiers.N_BLOCK, "Block", info);
       this.body = [];
     };
@@ -155,7 +155,7 @@ export namespace SyntaxTree {
     public condition: BaseNodeAST;
     public alternate: IfStatementNode | BlockNode;
 
-    constructor(info: LinePosition) {
+    constructor(info: TokenInformation) {
       super(NodeIdentifiers.N_IF_STMNT, "IfStmnt", info);
     };
 
@@ -164,17 +164,17 @@ export namespace SyntaxTree {
     };
   };
 
-  export class MethodNode extends BaseNodeAST {
+  export class MethodExpressionNode extends BaseNodeAST {
     public params: IdentfierNode[];
     public block: BlockNode;
 
-    constructor(info: LinePosition) {
-      super(NodeIdentifiers.N_METHOD, "Method", info);
+    constructor(info: TokenInformation) {
+      super(NodeIdentifiers.N_METHOD_EXPR, "MethodExpression", info);
       this.params = [];
     };
 
     public accept(visitor: TreeVisitor): void {
-      visitor.visitMethod(this); 
+      visitor.visitMethodExpr(this); 
     };
   };
 
@@ -182,7 +182,7 @@ export namespace SyntaxTree {
     public parent: IdentfierNode | MemberExpressionNode;
     public accessing: IdentfierNode;
 
-    constructor(info: LinePosition) {
+    constructor(info: TokenInformation) {
       super(NodeIdentifiers.N_MEMBER_EXPR, "MemberExpression", info);
     };
 
@@ -195,7 +195,7 @@ export namespace SyntaxTree {
   export class ExpressionCallNode extends BaseNodeAST {
     public arguments: BaseNodeAST[];
     public callee: IdentfierNode | MemberExpressionNode;
-    constructor(info: LinePosition) {
+    constructor(info: TokenInformation) {
       super(NodeIdentifiers.N_EXPR_CALL, "ExpressionCall", info);
       this.arguments = [];
     };
@@ -206,7 +206,7 @@ export namespace SyntaxTree {
   };
 
   export class BreakStatementNode extends BaseNodeAST {
-    constructor(info: LinePosition) {
+    constructor(info: TokenInformation) {
       super(NodeIdentifiers.N_BREAK_STMNT, "BreakStatement", info);
     };
 
@@ -216,7 +216,7 @@ export namespace SyntaxTree {
   };
 
   export class ContinueStatementNode extends BaseNodeAST {
-    constructor(info: LinePosition) {
+    constructor(info: TokenInformation) {
       super(NodeIdentifiers.N_CONTINUE_STMNT, "ContinueStatement", info);
     };
 
@@ -227,7 +227,7 @@ export namespace SyntaxTree {
 
   export class ReturnStatementNode extends BaseNodeAST {
     public value: BaseNodeAST;
-    constructor(info: LinePosition, value: BaseNodeAST) {
+    constructor(info: TokenInformation, value: BaseNodeAST) {
       super(NodeIdentifiers.N_RETURN_STMNT, "ReturnStatement", info);
       this.value = value;
     };
@@ -241,7 +241,7 @@ export namespace SyntaxTree {
     public key: IdentfierNode;
     public value: BaseNodeAST;
 
-    constructor(info: LinePosition) {
+    constructor(info: TokenInformation) {
       super(NodeIdentifiers.N_DIRECT_MEMBER, "DirectMember", info);
     };
 
@@ -251,7 +251,7 @@ export namespace SyntaxTree {
   export class ObjectExpressionNode extends BaseNodeAST {
     public members: DirectMemberNode[];
     
-    constructor(info: LinePosition) {
+    constructor(info: TokenInformation) {
       super(NodeIdentifiers.N_OBJECT_EXPR, "ObjectExpression", info);
       this.members = [];
     };
@@ -259,16 +259,16 @@ export namespace SyntaxTree {
     public accept(): void{};
   };
 
-  export class CloneStatementNode extends BaseNodeAST {
+  export class CloneExpressionNode extends BaseNodeAST {
     public cloning: IdentfierNode | MemberExpressionNode;
     public object: ObjectExpressionNode;
 
-    constructor(info: LinePosition) {
-      super(NodeIdentifiers.N_CLONE_STMNT, "CloneStatement", info);
+    constructor(info: TokenInformation) {
+      super(NodeIdentifiers.N_CLONE_EXPR, "CloneExpression", info);
     };
 
     public accept(visitor: TreeVisitor): void {
-      visitor.visitCloneStmnt(this); 
+      visitor.visitCloneExpr(this); 
     };
   };
 
@@ -278,7 +278,7 @@ export namespace SyntaxTree {
     public update: BaseNodeAST;
     public block: BlockNode;
 
-    constructor(info: LinePosition) {
+    constructor(info: TokenInformation) {
       super(NodeIdentifiers.N_FOR_STMNT, "ForStatement", info);
     };
 
@@ -291,7 +291,7 @@ export namespace SyntaxTree {
     public condition: BaseNodeAST;
     public block: BlockNode;
 
-    constructor(info: LinePosition) {
+    constructor(info: TokenInformation) {
       super(NodeIdentifiers.N_WHILE_STMNT, "WhileStatement", info);
     };
     
@@ -305,7 +305,7 @@ export namespace SyntaxTree {
     public condition: BaseNodeAST | null;
     public block: BlockNode;
   
-    constructor(info: LinePosition) {
+    constructor(info: TokenInformation) {
       super(NodeIdentifiers.N_CASE_TEST, "CaseTest", info);
       this.isDefault = false;
       this.condition = null;
@@ -319,7 +319,7 @@ export namespace SyntaxTree {
     public discriminant: BaseNodeAST;
     public tests: CaseStatementTestNode[];
 
-    constructor(info: LinePosition) {
+    constructor(info: TokenInformation) {
       super(NodeIdentifiers.N_CASE_STMNT, "CaseStatement", info);
       this.tests = [];
     };

@@ -52,14 +52,3 @@ export enum TokenIdentifiers {
   LEFT_PARENTHESIS,
   RIGHT_PARENTHESIS, 
 };
-
-export type LinePosition = {
-  char: number;
-  line: number;
-};
-
-export type Token = {
-  id: TokenIdentifiers;
-  lexeme: string;
-  info: LinePosition;
-};

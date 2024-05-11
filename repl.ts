@@ -1,19 +1,11 @@
-import Lexer from "./src/frontend/lexer";
-import Parser from "./src/frontend/parser";
-import Walker from "./src/runtime/interpreter/walker"
+import GolosinaExceptions from "./src/errors/exceptions";
+import Interpreter from "./src/interpreter";
 import Readline from "node:readline";
 
 class Repl {
   private readline: Readline.Interface;
-  private lexer: Lexer;
-  private parser: Parser;
-  private walker: Walker;
-  
+
   constructor() {
-    this.lexer = new Lexer();
-    this.parser = new Parser();
-    this.walker = new Walker();
-      
     this.readline = Readline.createInterface({
       input: process.stdin,
       output: process.stdout
@@ -28,25 +20,23 @@ class Repl {
         this.readline.close();
         return
       };
-      
-      this.lexer.setSource = input;
 
-      const tokens = this.lexer.execute();
-      this.parser.setSource = tokens;
-      
-      const program = this.parser.generateAST();
-      // console.log(program)      
+      try {
+        Interpreter.lexer.setSource = input;
+        Interpreter.parser.setSource = Interpreter.lexer.execute();
+        Interpreter.walker.setSource = Interpreter.parser.generateAST();
+        Interpreter.walker.execute();
+        this.recall();
 
-      this.walker.setSource = program;
-      this.walker.execute();
-      
-      this.recall();
-    }); 
+      } catch (e) {
+
+      }
+    });
   };
-  
+
   public execute(): void {
-    console.log("GarbageLang v2.0.0")
-    this.recall();    
+    console.log("Golosina v1.0.0")
+    this.recall();
   };
 };
 

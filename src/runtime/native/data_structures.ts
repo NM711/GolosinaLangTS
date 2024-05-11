@@ -1,4 +1,4 @@
-import { RuntimeObjects, RuntimeValues } from "../runtime_values";
+import { RuntimeObjects, RuntimeValues } from "../core/runtime_values";
 
 namespace GolosinaDataStructures {
   export class Vector {

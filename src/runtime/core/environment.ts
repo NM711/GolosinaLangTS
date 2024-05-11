@@ -1,5 +1,5 @@
+import GolosinaExceptions from "../../errors/exceptions";
 import { RuntimeValueID, RuntimeValues } from "./runtime_values";
-import { GolosinaEnvironmentError } from "../exceptions";
 
 export enum ScopeIdentifier {
   S_GLOBAL,
@@ -12,8 +12,7 @@ export enum ScopeIdentifier {
 export enum EnvironmentErrorState {
   ENV_ERR_UNRESOLVED,
   ENV_ERR_DECL_EXISTS,
-  ENV_ERR_CONST_RE_ASSIGNMENT,
-  ENV_INVALID_RESOLVER_STATE,
+  ENV_ERR_CONST_RE_ASSIGNMENT
 };
 
 class Scope {
@@ -53,7 +52,7 @@ class Environment {
 
   public declare(symbol: string, value: RuntimeValues.Value) {
     if (this.current.symbols.has(symbol)) {
-      throw new GolosinaEnvironmentError(`Symbol "${symbol}" has already been declared within the current scope!`, EnvironmentErrorState.ENV_ERR_DECL_EXISTS);
+      throw new GolosinaExceptions.Runtime.EnvironmentError(symbol, EnvironmentErrorState.ENV_ERR_DECL_EXISTS);
     };
     
     this.current.symbols.set(symbol, value);
@@ -70,7 +69,7 @@ class Environment {
           const variable = resolved as RuntimeValues.Variable;
       
           if (variable.isConst) {
-            throw new GolosinaEnvironmentError(`Attempted to re-assign constant at "${symbol}"`, EnvironmentErrorState.ENV_ERR_CONST_RE_ASSIGNMENT);
+            throw new GolosinaExceptions.Runtime.EnvironmentError(symbol, EnvironmentErrorState.ENV_ERR_CONST_RE_ASSIGNMENT);
           };
         };
 
@@ -79,7 +78,7 @@ class Environment {
       };
     };
 
-    throw new GolosinaEnvironmentError(` Unable to resolve symbol at "${symbol}"`, EnvironmentErrorState.ENV_ERR_UNRESOLVED);
+    throw new GolosinaExceptions.Runtime.EnvironmentError(symbol, EnvironmentErrorState.ENV_ERR_UNRESOLVED);
   };
 
   public resolve(symbol: string): RuntimeValues.Value {
@@ -92,7 +91,7 @@ class Environment {
       };
     };
 
-    throw new GolosinaEnvironmentError(`Unable to resolve symbol at "${symbol}"`, EnvironmentErrorState.ENV_ERR_UNRESOLVED);
+    throw new GolosinaExceptions.Runtime.EnvironmentError(symbol, EnvironmentErrorState.ENV_ERR_UNRESOLVED);
   };
 };
 

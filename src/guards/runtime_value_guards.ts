@@ -1,5 +1,5 @@
-import { RuntimeValueID, RuntimeObjects } from "../runtime/runtime_values";
-import type { RuntimeValues } from "../runtime/runtime_values";
+import { RuntimeValueID, RuntimeObjects } from "../runtime/core/runtime_values";
+import type { RuntimeValues } from "../runtime/core/runtime_values";
 
 /**
   Useful typeguard helpers

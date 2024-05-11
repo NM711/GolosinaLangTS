@@ -1,5 +1,5 @@
 import fs from "node:fs"
-import { ParamState, RuntimeObjects, RuntimeValues } from "../runtime_values";
+import { ParamState, RuntimeObjects, RuntimeValues } from "../core/runtime_values";
 import RuntimeValueTypeGuard from "../../guards/runtime_value_guards";
 import GolosinaDataStructures from "./data_structures";
 

@@ -1,7 +1,6 @@
-import { DataType } from "../common";
-import { GolosinaRuntimeError } from "../exceptions";
-import type { SyntaxTree } from "../frontend/ast"
-import GolosinaDataStructures from "./native/data_structures";
+import { DataType } from "../../common";
+import GolosinaExceptions from "../../errors/exceptions";
+import type { SyntaxTree } from "../../frontend/parser/ast"
 
 export enum RuntimeValueID {
   RID_OBJ,
@@ -103,7 +102,7 @@ export namespace RuntimeValues {
         proto = proto.prototype;
       };
 
-      throw new GolosinaRuntimeError(`Could not get member "${key}" because it is undefined!`, null);
+      throw new GolosinaExceptions.Runtime.RuntimeError(`Could not get member "${key}" because it is undefined!`);
     };
 
     public setMember(key: string, value: Value): void {
@@ -118,7 +117,7 @@ export namespace RuntimeValues {
         proto = proto.prototype;
       };
 
-      throw new GolosinaRuntimeError(`Could not set member "${key}" because it is undefined!`, null);
+      throw new GolosinaExceptions.Runtime.RuntimeError(`Could not set member "${key}" because it is undefined!`);
     };
   };
       

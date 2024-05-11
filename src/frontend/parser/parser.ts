@@ -1,26 +1,21 @@
-import { SyntaxTree } from "./ast";
-import { Token, TokenIdentifiers } from "../types/token.types";
-import { GolosinaSyntaxError } from "../exceptions"
-import { DataType } from "../common";
-import TreeNodeTypeGuard from "../guards/node_gurads";
+import GolosinaExceptions from "../../errors/exceptions";
+import TreeNodeTypeGuard from "../../guards/node_gurads";
 import SemanticValidator from "./semantic_validator";
-
-enum ParserState {
-  NONE,
-  IN_LOOP,
-  IN_CASE,
-};
-
+import ErrorReporter from "../../errors/reporter";
+import { SyntaxTree } from "./ast";
+import { TokenIdentifiers } from "../../types/token.types";
+import { LinePosition, Token } from "../lexer/token";
+import { DataType } from "../../common";
 
 class Parser {
+  private program: SyntaxTree.Program;
   private validator: SemanticValidator;
   private tokens: Token[];
   private index: number;
-  private state: ParserState;
 
   constructor() {
+    this.program = [];
     this.validator = new SemanticValidator();
-    this.state = ParserState.NONE;
     this.index = 0;
   };
 
@@ -30,6 +25,7 @@ class Parser {
 
   private reset(): void {
     this.tokens = [];
+    this.program = [];
     this.index = 0;
   };
 
@@ -48,28 +44,40 @@ class Parser {
   };
 
   private parsePrimary(): SyntaxTree.BaseNodeAST {
+    let token = this.look;
+
     switch (this.look.id) {
       case TokenIdentifiers.BOOLEAN_LITERAL:
-        return new SyntaxTree.LiteralNode(this.look.lexeme, DataType.T_BOOLEAN, this.look.info);
+        this.eat();
+        return new SyntaxTree.LiteralNode(token.lexeme, DataType.T_BOOLEAN, token.info);
       case TokenIdentifiers.INTEGER_LITERAL:
-        return new SyntaxTree.LiteralNode(this.look.lexeme, DataType.T_INTEGER, this.look.info);
+        this.eat();
+        return new SyntaxTree.LiteralNode(this.look.lexeme, DataType.T_INTEGER, token.info);
       case TokenIdentifiers.FLOAT_LITERAL:
-        return new SyntaxTree.LiteralNode(this.look.lexeme, DataType.T_FLOAT, this.look.info);
+        this.eat();
+        return new SyntaxTree.LiteralNode(token.lexeme, DataType.T_FLOAT, token.info);
       case TokenIdentifiers.NULL:
-        return new SyntaxTree.LiteralNode(this.look.lexeme, DataType.T_NULL, this.look.info);
+        this.eat();
+        return new SyntaxTree.LiteralNode(token.lexeme, DataType.T_NULL, token.info);
       case TokenIdentifiers.STRING_LITERAL:
-        return new SyntaxTree.LiteralNode(this.look.lexeme, DataType.T_STRING, this.look.info);
+        this.eat();
+        return new SyntaxTree.LiteralNode(token.lexeme, DataType.T_STRING, token.info);
       case TokenIdentifiers.IDENT:
-        return new SyntaxTree.IdentfierNode(this.look.lexeme, this.look.info)
+        this.eat();
+        return new SyntaxTree.IdentfierNode(token.lexeme, token.info)
+      case TokenIdentifiers.CLONE:
+        return this.parseCloneExpr();
+      case TokenIdentifiers.METHOD:
+        return this.parseMethodExpr();
+
       default:
-        // temporary error
-        throw new GolosinaSyntaxError(`Unexpected primary expression at "${this.look.lexeme}"!`, this.look.info);
+        throw new GolosinaExceptions.Frontend.SyntaxError(`Unexpected primary expression start at "${this.look.lexeme}"!`, this.look.info.start);
     };
   };
 
   private parseReturn(): SyntaxTree.ReturnStatementNode {
     this.eat();
-    const returned = new SyntaxTree.ReturnStatementNode(this.look.info, this.validator.validateReturn(this.parse()));
+    const returned = new SyntaxTree.ReturnStatementNode(this.look.info, this.validator.validateReturn(this.parseExpr()));
 
     return returned;
   };
@@ -95,12 +103,11 @@ class Parser {
   private parseParams(params: SyntaxTree.IdentfierNode[]) {
     while (true) {
       const ident = this.validator.expect.ident(this.parsePrimary(), "Parameter Identifier");
-      this.eat();
 
       params.push(ident);
 
       if (this.index === this.tokens.length) {
-        throw new GolosinaSyntaxError(`Expected ")" but instead reached "EOF"!`, this.look.info);
+        throw new GolosinaExceptions.Frontend.SyntaxError(`Expected ")" but instead reached "EOF"!`, this.look.info.start);
       };
 
       if (this.validator.tokenConditions.isRightParenthesis(this.look)) {
@@ -113,10 +120,7 @@ class Parser {
   };
 
   private parseBreakStmnt(): SyntaxTree.BreakStatementNode {
-    if (this.state !== ParserState.IN_LOOP && this.state !== ParserState.IN_CASE) {
-      throw new GolosinaSyntaxError(`Encountered an unexpected "break" statement outside of a loop or case statement!`, this.look.info);
-    };
-
+    this.validator.validateBreak(this.look.info);
     const breakStmnt = new SyntaxTree.BreakStatementNode(this.look.info);
     this.eat();
 
@@ -124,10 +128,7 @@ class Parser {
   };
 
   private parseContinueStmnt(): SyntaxTree.ContinueStatementNode {
-    if (this.state !== ParserState.IN_LOOP) {
-      throw new GolosinaSyntaxError(`Encountered an unexpected "continue" statement oustide of a loop!`, this.look.info);
-    };
-
+    this.validator.validateContinue(this.look.info);
     const continueStmnt = new SyntaxTree.ContinueStatementNode(this.look.info);
     this.eat();
 
@@ -141,7 +142,7 @@ class Parser {
     this.validator.expect.leftParenthesis(this.look);
     this.eat();
 
-    ifStmnt.condition = this.validator.validateConditionExpression(this.parse());
+    ifStmnt.condition = this.parseExpr();
     this.validator.expect.rightParenthesis(this.look);
     this.eat();
 
@@ -155,15 +156,15 @@ class Parser {
     return ifStmnt;
   };
 
-  public parseCaseStmnt(): SyntaxTree.CaseStatementNode {
-    this.state = ParserState.IN_CASE;
+  private parseCaseStmnt(): SyntaxTree.CaseStatementNode {
+    this.validator.state.inCase = true;
     const caseStmnt = new SyntaxTree.CaseStatementNode(this.look.info);
     this.eat();
 
     this.validator.expect.leftParenthesis(this.look);
     this.eat();
 
-    caseStmnt.discriminant = this.validator.validateConditionExpression(this.parse());
+    caseStmnt.discriminant = this.parseExpr();
 
     this.validator.expect.rightParenthesis(this.look);
     this.eat();
@@ -177,7 +178,7 @@ class Parser {
       const caseTest = new SyntaxTree.CaseStatementTestNode(this.look.info);
 
       if (!this.validator.tokenConditions.isCaseTest(this.look)) {
-        throw new GolosinaSyntaxError(`Expected a valid test within "case" statement!`, this.look.info);
+        throw new GolosinaExceptions.Frontend.SyntaxError(`Expected a valid test within "case" statement!`, this.look.info.start);
       };
 
       if (this.validator.tokenConditions.isTokenID(TokenIdentifiers.DEFAULT, this.look)) {
@@ -187,28 +188,29 @@ class Parser {
         caseTest.block = this.parseBlock();
       } else {
         this.eat();
-        caseTest.condition = this.validator.validateConditionExpression(this.parse());
+        caseTest.condition = this.parseExpr();
         caseTest.block = this.parseBlock();
       };
 
       caseStmnt.tests.push(caseTest);
-      
+
       if (!this.validator.tokenConditions.isCaseTest(this.look)) {
         break;
       };
     };
 
     if (defaultCounter > 1) {
-      throw new GolosinaSyntaxError(`Encountered more than one case "default"!`, caseStmnt.info);
+      throw new GolosinaExceptions.Frontend.SyntaxError(`Encountered more than one case "default"!`, caseStmnt.info.start);
     };
 
     this.validator.expect.rightCurly(this.look);
     this.eat();
+    this.validator.state.inCase = false;
     return caseStmnt;
   };
 
   private parseForStmnt(): SyntaxTree.ForStatementNode {
-    this.state = ParserState.IN_LOOP;
+    this.validator.state.inLoop = true;
     const forStmnt = new SyntaxTree.ForStatementNode(this.look.info);
     this.eat();
 
@@ -218,26 +220,26 @@ class Parser {
     forStmnt.init = this.parse();
     this.validator.expect.semicolon(this.look);
     this.eat();
-    forStmnt.condition = this.validator.validateConditionExpression(this.parse());
+    forStmnt.condition = this.parseExpr();
     this.validator.expect.semicolon(this.look);
     this.eat();
-    forStmnt.update = this.parse();
+    forStmnt.update = this.parseExpr();
     this.validator.expect.rightParenthesis(this.look);
     this.eat();
     forStmnt.block = this.parseBlock();
 
-    this.state = ParserState.NONE;
+    this.validator.state.inLoop = false;
     return forStmnt;
   };
 
-  public parseWhileStmnt(): SyntaxTree.WhileStatementNode {
+  private parseWhileStmnt(): SyntaxTree.WhileStatementNode {
     const whileStmnt = new SyntaxTree.WhileStatementNode(this.look.info);
     this.eat();
 
     this.validator.expect.leftParenthesis(this.look);
     this.eat();
 
-    whileStmnt.condition = this.validator.validateConditionExpression(this.parse());
+    whileStmnt.condition = this.parseExpr();
 
     this.validator.expect.rightParenthesis(this.look);
     this.eat();
@@ -247,13 +249,14 @@ class Parser {
     return whileStmnt;
   };
 
-  private parseMethod(): SyntaxTree.BaseNodeAST {
-    const method = new SyntaxTree.MethodNode(this.look.info);
+  private parseMethodExpr(): SyntaxTree.BaseNodeAST {
+    this.validator.state.inMethod = true;
+    const method = new SyntaxTree.MethodExpressionNode(this.look.info);
     this.eat();
 
     this.validator.expect.leftParenthesis(this.look);
     this.eat();
-    
+
     if (!this.validator.tokenConditions.isRightParenthesis(this.look)) {
       this.parseParams(method.params);
     };
@@ -262,7 +265,7 @@ class Parser {
     this.eat();
 
     method.block = this.parseBlock();
-
+    this.validator.state.inMethod = false;
     return method;
   };
 
@@ -276,15 +279,13 @@ class Parser {
     this.eat();
 
     variable.ident = this.validator.expect.ident(this.parsePrimary(), "Variable Identifier");
-    this.eat();
 
     if (this.validator.tokenConditions.isTokenID(TokenIdentifiers.BINARY_ASSIGNMENT, this.look)) {
       this.eat();
-      variable.init = this.validator.validateVarInit(this.parse());
+      variable.init = this.parseExpr();
     };
 
     this.validator.validateConstant(variable);
-
     return variable;
   };
 
@@ -293,17 +294,15 @@ class Parser {
       const direct = new SyntaxTree.DirectMemberNode(this.look.info);
 
       direct.key = this.validator.expect.ident(this.parsePrimary(), "Object Key Identfier");
-      this.eat();
 
       this.validator.expect.token(TokenIdentifiers.BINARY_ASSIGNMENT, "=", this.look);
       this.eat();
 
-      direct.value = this.validator.validateAssignmentRHS(this.parse(), true);
-
+      direct.value = this.validator.validateAssignmentRHS(this.parseExpr(), true);
       members.push(direct);
 
       if (this.index === this.tokens.length) {
-        throw new GolosinaSyntaxError(`Expected object end "}" but instead reached "EOF"!`, this.look.info);
+        throw new GolosinaExceptions.Frontend.SyntaxError(`Expected object end "}" but instead reached "EOF"!`, this.look.info.start);
       };
 
       if (this.validator.tokenConditions.isRightCurly(this.look)) {
@@ -316,6 +315,7 @@ class Parser {
   };
 
   private parseObjectExpr(): SyntaxTree.ObjectExpressionNode {
+    this.validator.state.inObj = true;
     this.validator.expect.leftCurly(this.look);
     const object = new SyntaxTree.ObjectExpressionNode(this.look.info);
     this.eat();
@@ -326,16 +326,15 @@ class Parser {
 
     this.validator.expect.rightCurly(this.look);
     this.eat();
-
+    this.validator.state.inObj = false;
     return object;
   };
 
-  private parseCloneStmnt(): SyntaxTree.CloneStatementNode {
-    const cloningExpr = new SyntaxTree.CloneStatementNode(this.look.info);
+  private parseCloneExpr(): SyntaxTree.CloneExpressionNode {
+    const cloningExpr = new SyntaxTree.CloneExpressionNode(this.look.info);
     this.eat();
 
-    cloningExpr.cloning = this.validator.expect.memberOrIdent(this.parse(), "Clone Object Identifier");
-
+    cloningExpr.cloning = this.validator.expect.memberOrIdent(this.parseExpr(), "Clone Object Identifier");
     cloningExpr.object = this.parseObjectExpr();
 
     return cloningExpr;
@@ -343,12 +342,12 @@ class Parser {
 
   private parseArguments(args: SyntaxTree.BaseNodeAST[]) {
     while (true) {
-      const arg = this.validator.validateArgument(this.parse());
+      const arg = this.validator.validateArgument(this.parseExpr());
 
       args.push(arg);
 
       if (this.index === this.tokens.length) {
-        throw new GolosinaSyntaxError(`Expected ")" but instead reached "EOF"!`, this.look.info);
+        throw new GolosinaExceptions.Frontend.SyntaxError(`Expected ")" but instead reached "EOF"!`, this.look.info.start);
       };
 
       if (this.validator.tokenConditions.isRightParenthesis(this.look)) {
@@ -365,7 +364,6 @@ class Parser {
 
     if (!this.validator.tokenConditions.isPrefix(this.look)) {
       lhs = this.parsePrimary();
-      this.eat();
     };
 
     while ((TreeNodeTypeGuard.isIdent(lhs) || TreeNodeTypeGuard.isMemberExpr(lhs)) && this.validator.tokenConditions.isArrow(this.look)) {
@@ -375,7 +373,6 @@ class Parser {
       memberExpr.parent = lhs;
 
       memberExpr.accessing = this.validator.expect.ident(this.parsePrimary(), `Member Accessor Identifier`);
-      this.eat();
 
       lhs = memberExpr;
     };
@@ -426,7 +423,7 @@ class Parser {
       unary.isPrefix = true;
       unary.op = this.look.lexeme;
       this.eat();
-      unary.argument = this.validator.expect.memberOrIdent(this.parse());
+      unary.argument = this.validator.expect.memberOrIdent(this.parseExpr());
       lhs = unary;
     };
 
@@ -527,7 +524,7 @@ class Parser {
       assignment.lhs = this.validator.validateAssignmentLHS(lhs);
       assignment.op = this.look.lexeme;
       this.eat();
-      assignment.rhs = this.validator.validateAssignmentRHS(this.parse());
+      assignment.rhs = this.validator.validateAssignmentRHS(this.parseExpr());
       lhs = assignment;
     };
 
@@ -544,23 +541,14 @@ class Parser {
       case TokenIdentifiers.CONST:
         return this.parseVar()
 
-      case TokenIdentifiers.CLONE:
-        return this.parseCloneStmnt();
-
       case TokenIdentifiers.BREAK:
         return this.parseBreakStmnt();
 
       case TokenIdentifiers.CONTINUE:
         return this.parseContinueStmnt();
 
-      case TokenIdentifiers.METHOD:
-        return this.parseMethod();
-
       case TokenIdentifiers.IF:
         return this.parseIfStmnt();
-
-      case TokenIdentifiers.CASE:
-        return this.parseCaseStmnt();
 
       case TokenIdentifiers.FOR:
         return this.parseForStmnt();
@@ -571,25 +559,78 @@ class Parser {
       case TokenIdentifiers.RETURN:
         return this.parseReturn();
 
+      case TokenIdentifiers.CASE:
+        return this.parseCaseStmnt();
+
       default:
         return this.parseExpr()
     };
   };
 
-  public generateAST(): SyntaxTree.Program {
-    const program: SyntaxTree.Program = [];
+  /*
+    Syncronizing the parser after error state.
+  */
 
+  private synchronize() {
+    while (this.index < this.tokens.length) {
+      // eat till we reach the next statement.
+      this.eat();
+      switch (this.look.id) {
+        case TokenIdentifiers.LET:
+        case TokenIdentifiers.CONST:
+        case TokenIdentifiers.FOR:
+        case TokenIdentifiers.WHILE:
+        case TokenIdentifiers.IF:
+        case TokenIdentifiers.RETURN:
+        case TokenIdentifiers.CASE:
+        case TokenIdentifiers.BREAK:
+        case TokenIdentifiers.CONTINUE:
+        return;
+      };
+    };
+  };
+
+  public generateAST(): SyntaxTree.Program {
+    let start: LinePosition | undefined;
+    let end: LinePosition | undefined;
+    let startIndex: number = 0;
+    let endIndex: number = 0;
+        
     while (this.index < this.tokens.length) {
       try {
-        program.push(this.parse());
+        startIndex = this.index;
+        start = this.tokens[this.index].info.start as LinePosition;
+        this.program.push(this.parse());
         this.validator.expect.semicolon(this.look);
         this.eat();
+      
       } catch (e) {
-        console.error(`${e.name}: ${e.message}`);
-        process.exit(1);
-      }
+        this.synchronize();
+        if (this.tokens[this.index]) {
+          endIndex = this.index;
+        } else {
+          endIndex = this.index - 1;
+        };
+        
+        end = this.tokens[endIndex].info.start as LinePosition;
+        
+        if (e instanceof GolosinaExceptions.Frontend.SyntaxError) {
+          e.start = start;
+          e.end = end;
+          e.startIndex = startIndex;
+          e.endIndex = endIndex;
+        };
+
+        // push errors to unwind later.
+        ErrorReporter.syntaxErrors.push(e);
+      };
     };
 
+    // at the very end if, run the reporter. If there is any errors within the error stack. The reporter will gracefully exit after
+    // logging all of the errors and lines.
+    ErrorReporter.syntax(this.tokens);
+  
+    const program = this.program;
     this.reset();
     return program;
   };

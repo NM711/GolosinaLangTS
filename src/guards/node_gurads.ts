@@ -1,5 +1,5 @@
-import { NodeIdentifiers } from "../frontend/ast";
-import type { SyntaxTree } from "../frontend/ast";
+import { NodeIdentifiers } from "../frontend/parser/ast";
+import type { SyntaxTree } from "../frontend/parser/ast";
 
 /*
   Typeguards for nodes.
@@ -18,8 +18,8 @@ class TreeNodeTypeGuard {
     return node.id === NodeIdentifiers.N_MEMBER_EXPR;
   };
 
-  public static isCloneStmnt(node: SyntaxTree.BaseNodeAST): node is SyntaxTree.CloneStatementNode {
-    return node.id === NodeIdentifiers.N_CLONE_STMNT;
+  public static isCloneExpr(node: SyntaxTree.BaseNodeAST): node is SyntaxTree.CloneExpressionNode {
+    return node.id === NodeIdentifiers.N_CLONE_EXPR;
   };
 
   public static isBinaryExpr(node: SyntaxTree.BaseNodeAST): node is SyntaxTree.BinaryExpressionNode {
@@ -34,8 +34,8 @@ class TreeNodeTypeGuard {
     return node.id === NodeIdentifiers.N_EXPR_CALL;
   };
 
-  public static isMethod(node: SyntaxTree.BaseNodeAST): node is SyntaxTree.MethodNode {
-    return node.id === NodeIdentifiers.N_METHOD;
+  public static isMethod(node: SyntaxTree.BaseNodeAST): node is SyntaxTree.MethodExpressionNode {
+    return node.id === NodeIdentifiers.N_METHOD_EXPR;
   };
 };
 

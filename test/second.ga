@@ -16,6 +16,11 @@ const Volumes = clone Object {
 	}
 };
 
+const y;
+
+
+const x;
+
 
 const Solids = clone Object {
 	pi = 3.14159265359,
@@ -27,8 +32,7 @@ const Solids = clone Object {
 	}
 };
 
-
-const Calculator = clone Object {
+let y = const Calculator = clone Object {
 	# Probability Formula = P = (f / p) * 100
 
 	# f = Favorable Cases
@@ -41,6 +45,11 @@ const Calculator = clone Object {
 	},
 
 	solids = Solids
+};
+
+
+for (const x; x < 5; ++x) {
+	
 };
 
 Calculator->probability(10, 3);

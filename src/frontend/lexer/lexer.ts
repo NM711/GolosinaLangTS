@@ -1,18 +1,17 @@
-import { GolosinaSyntaxError } from "../exceptions";
-import { LinePosition, Token, TokenIdentifiers } from "../types/token.types";
+import { TokenIdentifiers } from "../../types/token.types";
+import { LinePosition, TokenInformation, Token } from "./token";
 
 class Lexer {
   private table: Map<string, TokenIdentifiers>;
   private tokens: Token[];
   private input: string[];
+  private info: TokenInformation;
   private position: LinePosition;
-  private isErrorState: boolean;
-  private errorLexeme: string;
       
   constructor() {
     this.tokens = [];
-    this.position = { char: 1, line: 1 };
-    this.isErrorState = false;
+    this.position = new LinePosition();
+    this.info = new TokenInformation();
     this.table = new Map();
     this.table.set("if", TokenIdentifiers.IF);
     this.table.set("else", TokenIdentifiers.ELSE);
@@ -59,15 +58,19 @@ class Lexer {
     return /[\+\-\*\/\%\&\|\.\!\#\[\]\(\)\{\}\:\;\,\<\>\=\"]/.test(this.peek());
   };
 
-  private pushToken(lexeme: string, id: TokenIdentifiers) {
-    this.tokens.push({
-      id,
-      lexeme,
-      info: {
-        line: this.position.line,
-        char: this.position.char
-      }
-    });
+  private pushToken(lexeme: string, id: TokenIdentifiers, eatQnt: number = 0) {
+    for (let i = 0; i < eatQnt; ++i) {
+      this.eat();
+    };
+
+    this.updateInfo("end");
+
+    this.tokens.push(new Token(id, lexeme, this.info));
+  };
+
+  private updateInfo(type: "end" | "start") {
+    this.info[type].line = this.position.line;
+    this.info[type].char = this.position.char;
   };
 
   private updatePosition(): void {
@@ -83,12 +86,9 @@ class Lexer {
 
   private handleDoubleCharSpecial(lexeme1: string, lexeme2: string, id1: TokenIdentifiers, id2: TokenIdentifiers) {
     if (this.peek(1) === lexeme2) {
-      this.pushToken(lexeme1 + lexeme2, id2);
-      this.eat();
-      this.eat();
+      this.pushToken(lexeme1 + lexeme2, id2, 2);
     } else {
-      this.pushToken(lexeme1, id1);
-      this.eat();
+      this.pushToken(lexeme1, id1, 1);
     };
   };
 
@@ -125,62 +125,48 @@ class Lexer {
         
       case "-":
         if (this.peek(1) === "-") {
-          this.pushToken("--", TokenIdentifiers.UNARY_DECREMENT);
-          this.eat();
-          this.eat();
+          this.pushToken("--", TokenIdentifiers.UNARY_DECREMENT, 2);
         } else if (this.peek(1) === ">") {
-          this.pushToken("->", TokenIdentifiers.ARROW);
-          this.eat();
-          this.eat();
+          this.pushToken("->", TokenIdentifiers.ARROW, 2);
         } else {
-          this.pushToken("-", TokenIdentifiers.BINARY_SUBTRACTION);
-          this.eat();
+          this.pushToken("-", TokenIdentifiers.BINARY_SUBTRACTION, 1);
         };
       break;
         
       case "*":
-        this.pushToken("*", TokenIdentifiers.BINARY_MULTIPLICATION);
-        this.eat();
+        this.pushToken("*", TokenIdentifiers.BINARY_MULTIPLICATION, 1);
       break;
         
       case "/":
-        this.pushToken("/", TokenIdentifiers.BINARY_DIVISION);
-        this.eat();
+        this.pushToken("/", TokenIdentifiers.BINARY_DIVISION, 1);
       break;
         
       case "%":
-        this.pushToken("%", TokenIdentifiers.BINARY_MODULUS);
-        this.eat();
+        this.pushToken("%", TokenIdentifiers.BINARY_MODULUS, 1);
       break;
 
       case ",":
-        this.pushToken(",", TokenIdentifiers.SEPERATOR);
-        this.eat();
+        this.pushToken(",", TokenIdentifiers.SEPERATOR, 1);
       break;
 
       case ";":
-        this.pushToken(";", TokenIdentifiers.SEMICOLON);
-        this.eat();
+        this.pushToken(";", TokenIdentifiers.SEMICOLON, 1);
       break;
 
       case "(":
-        this.pushToken("(", TokenIdentifiers.LEFT_PARENTHESIS);
-        this.eat();
+        this.pushToken("(", TokenIdentifiers.LEFT_PARENTHESIS, 1);
       break;
         
       case ")":
-        this.pushToken(")", TokenIdentifiers.RIGHT_PARENTHESIS);
-        this.eat();
+        this.pushToken(")", TokenIdentifiers.RIGHT_PARENTHESIS, 1);
       break;
         
       case "{":
-        this.pushToken("{", TokenIdentifiers.LEFT_CURLY);
-        this.eat();
+        this.pushToken("{", TokenIdentifiers.LEFT_CURLY, 1);
       break;
 
       case "}":
-        this.pushToken("}", TokenIdentifiers.RIGHT_CURLY);
-        this.eat();
+        this.pushToken("}", TokenIdentifiers.RIGHT_CURLY, 1);
       break;
               
       case "&":
@@ -192,13 +178,11 @@ class Lexer {
       break;
 
       case ":":
-        this.pushToken(":", TokenIdentifiers.COLON);
-        this.eat();
+        this.pushToken(":", TokenIdentifiers.COLON, 1);
       break;
       
       default:
-        this.errorLexeme = this.peek();
-        this.isErrorState = true;
+       this.eat();
     };
   
   };
@@ -216,8 +200,6 @@ class Lexer {
       str += this.peek()
       this.eat();
     };
-
-    console.log(str)
 
     this.pushToken(str, TokenIdentifiers.STRING_LITERAL);
   };
@@ -251,9 +233,6 @@ class Lexer {
       this.pushToken(key, TokenIdentifiers.INTEGER_LITERAL);
     } else if (/^[0-9]+\.[0-9]+$/.test(key)) {
       this.pushToken(key, TokenIdentifiers.FLOAT_LITERAL);
-    } else {
-      this.errorLexeme = key;
-      this.isErrorState = true;
     };
   };
 
@@ -271,19 +250,12 @@ class Lexer {
       };
       
       if (this.isDigit || this.isAlpha) {
-        this.handleKW();        
+        this.updateInfo("start");
+        this.handleKW();
       } else if (this.isSpecial) {
+        this.updateInfo("start");
         this.handleSpecial();        
-      } else {
-        this.errorLexeme = this.peek();
-        this.isErrorState = true;
       };
-
-
-      if (this.isErrorState) {
-        throw new GolosinaSyntaxError(`Invalid lexeme found in input at "${this.errorLexeme}"`, this.position);
-      };
-      
     };
 
     const tempTokens = this.tokens;

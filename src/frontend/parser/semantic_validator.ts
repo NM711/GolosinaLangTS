@@ -1,61 +1,62 @@
-import { GolosinaSyntaxError } from "../exceptions";
-import TreeNodeTypeGuard from "../guards/node_gurads";
-import { LinePosition, Token, TokenIdentifiers } from "../types/token.types";
-import { NodeIdentifiers, SyntaxTree } from "./ast";
+import GolosinaExceptions from "../../errors/exceptions";
+import TreeNodeTypeGuard from "../../guards/node_gurads";
+import { TokenIdentifiers } from "../../types/token.types";
+import { LinePosition, Token, TokenInformation } from "../lexer/token";
+import { SyntaxTree } from "./ast";
 
 class Expect {
 
   private error(expected: string, received: string, info: LinePosition) {
-    return new GolosinaSyntaxError(`Expected "${expected}" instead received "${received}"!`, info);
+    return new GolosinaExceptions.Frontend.SyntaxError(`Expected "${expected}" instead received "${received}"!`, info);
   };
 
   public token(id: TokenIdentifiers, lexeme: string, received: Token) {
     if (id !== received.id) {
-      throw this.error(lexeme, received.lexeme, received.info);
+      throw this.error(lexeme, received.lexeme, received.info.start);
     };
   };
 
 
   public semicolon(received: Token) {
     if (TokenIdentifiers.SEMICOLON !== received.id) {
-      throw this.error(";", received.lexeme, received.info);
+      throw this.error(";", received.lexeme, received.info.start);
     };
   };
 
   public seperator(received: Token) {
     if (TokenIdentifiers.SEPERATOR !== received.id) {
-      throw this.error(",", received.lexeme, received.info);
+      throw this.error(",", received.lexeme, received.info.start);
     };
   };
 
   public leftParenthesis(received: Token) {
     if (TokenIdentifiers.LEFT_PARENTHESIS !== received.id) {
-      throw this.error("(", received.lexeme, received.info);
+      throw this.error("(", received.lexeme, received.info.start);
     };
   };
 
   public rightParenthesis(received: Token) {
     if (TokenIdentifiers.RIGHT_PARENTHESIS !== received.id) {
-      throw this.error(")", received.lexeme, received.info);
+      throw this.error(")", received.lexeme, received.info.start);
     };
   };
 
   public leftCurly(received: Token) {
     if (TokenIdentifiers.LEFT_CURLY !== received.id) {
-      throw this.error("{", received.lexeme, received.info);
+      throw this.error("{", received.lexeme, received.info.start);
     };
   };
 
   public rightCurly(received: Token) {
     if (TokenIdentifiers.RIGHT_CURLY !== received.id) {
-      throw this.error("}", received.lexeme, received.info);
+      throw this.error("}", received.lexeme, received.info.start);
     };
   };
 
 
   public ident(node: SyntaxTree.BaseNodeAST, expected: string = "Identifier"): SyntaxTree.IdentfierNode {
     if (!TreeNodeTypeGuard.isIdent(node)) {
-      throw this.error(expected, node.kind, node.info);
+      throw this.error(expected, node.kind, node.info.start);
     };
 
     return node;
@@ -63,7 +64,7 @@ class Expect {
 
   public memberOrIdent(node: SyntaxTree.BaseNodeAST, expected: string = "Identifier or MemberExpression"): SyntaxTree.IdentfierNode | SyntaxTree.MemberExpressionNode {
     if (!TreeNodeTypeGuard.isIdent(node) && !TreeNodeTypeGuard.isMemberExpr(node)) {
-      throw this.error(expected, node.kind, node.info);
+      throw this.error(expected, node.kind, node.info.start);
     };
 
     return node;
@@ -129,6 +130,20 @@ class TokenConditionalHelpers {
   };
 };
 
+class State {
+  public inObj: boolean;
+  public inLoop: boolean;
+  public inCase: boolean;
+  public inMethod: boolean;
+
+  constructor() {
+    this.inCase = false;
+    this.inLoop = false;
+    this.inObj = false;
+    this.inMethod = false;
+  };
+};
+
 /**
   Validator that validates the integrity of what is being parsed.
   Validate methods are more descriptive than expect methods.
@@ -137,10 +152,12 @@ class TokenConditionalHelpers {
 class SemanticValidator {
   public expect: Expect;
   public tokenConditions: TokenConditionalHelpers;
+  public state: State;
   
   constructor() {
     this.expect = new Expect();
     this.tokenConditions = new TokenConditionalHelpers();
+    this.state = new State();
   };
     
   /**
@@ -149,7 +166,7 @@ class SemanticValidator {
   */
 
   private isInvalidNode(node: SyntaxTree.BaseNodeAST): boolean {
-    return !TreeNodeTypeGuard.isCloneStmnt(node) &&
+    return !TreeNodeTypeGuard.isCloneExpr(node) &&
       !TreeNodeTypeGuard.isIdent(node) &&
       !TreeNodeTypeGuard.isLiteral(node) &&
       !TreeNodeTypeGuard.isMemberExpr(node) &&
@@ -163,12 +180,12 @@ class SemanticValidator {
     if (!isMember) {
       
       if (this.isInvalidNode(node)) {
-        throw new GolosinaSyntaxError(`Unexpected rhs value within assignment expression!`, node.info)
+        throw new GolosinaExceptions.Frontend.SyntaxError(`Unexpected rhs value within assignment expression!`, node.info.start)
       };
 
     } else {
       if (this.isInvalidNode(node) && !TreeNodeTypeGuard.isMethod(node)) {
-        throw new GolosinaSyntaxError(`Unexpected rhs value within direct member assignment expression!`, node.info)
+        throw new GolosinaExceptions.Frontend.SyntaxError(`Unexpected rhs value within direct member assignment expression!`, node.info.start)
       };
       
     };
@@ -178,7 +195,7 @@ class SemanticValidator {
 
   public validateAssignmentLHS(node: SyntaxTree.BaseNodeAST): SyntaxTree.IdentfierNode | SyntaxTree.MemberExpressionNode {
     if (!TreeNodeTypeGuard.isIdent(node) && !TreeNodeTypeGuard.isMemberExpr(node)) {
-      throw new GolosinaSyntaxError(`Invalid lhs value is present within assignment expression!`, node.info);
+      throw new GolosinaExceptions.Frontend.SyntaxError(`Invalid lhs value is present within assignment expression!`, node.info.start);
     };
 
     return node;
@@ -186,42 +203,23 @@ class SemanticValidator {
 
   public validateCallExprCallee(node: SyntaxTree.BaseNodeAST): SyntaxTree.IdentfierNode | SyntaxTree.MemberExpressionNode {
     if (!TreeNodeTypeGuard.isIdent(node) && !TreeNodeTypeGuard.isMemberExpr(node)) {
-      throw new GolosinaSyntaxError(`Invalid callee present within "call" expression!`, node.info);
+      throw new GolosinaExceptions.Frontend.SyntaxError(`Invalid callee present within "call" expression!`, node.info.start);
     };
 
     return node;
   };
 
-
-
   public validateVarInit(node: SyntaxTree.BaseNodeAST): SyntaxTree.BaseNodeAST {
     if (this.isInvalidNode(node)) {
-      throw new GolosinaSyntaxError(`Unexpected value within a variable initializer!`, node.info)
+      throw new GolosinaExceptions.Frontend.SyntaxError(`Unexpected value within a variable initializer!`, node.info.start)
     };
 
     return node;
   };
   
   public validateReturn(node: SyntaxTree.BaseNodeAST) {
-    if (this.isInvalidNode(node)) {
-      throw new GolosinaSyntaxError(`Unexpected value within "return" statement!`, node.info);
-    };
-
-    return node;
-  };
-
-  private isInvalidExpression(node: SyntaxTree.BaseNodeAST): boolean {
-    return !TreeNodeTypeGuard.isIdent(node) &&
-           !TreeNodeTypeGuard.isMemberExpr(node) &&
-           !TreeNodeTypeGuard.isBinaryExpr(node) &&
-           !TreeNodeTypeGuard.isLiteral(node) &&
-           !TreeNodeTypeGuard.isUnaryExpr(node) &&
-           !TreeNodeTypeGuard.isCallExpr(node)
-  };
-
-  public validateConditionExpression(node: SyntaxTree.BaseNodeAST): SyntaxTree.BaseNodeAST {
-    if (this.isInvalidExpression(node)) {
-      throw new GolosinaSyntaxError(`Invalid expression present in condition!`, node.info);
+    if (!this.state.inMethod) {
+      throw new GolosinaExceptions.Frontend.SyntaxError(`Encountered an unexpected "return" statement outside of a method body!`, node.info.start);
     };
 
     return node;
@@ -229,7 +227,7 @@ class SemanticValidator {
 
   public validateArgument(node: SyntaxTree.BaseNodeAST) {
     if (!TreeNodeTypeGuard.isIdent(node) && !TreeNodeTypeGuard.isLiteral(node) && !TreeNodeTypeGuard.isMemberExpr(node) && !TreeNodeTypeGuard.isCallExpr(node)) {
-      throw new GolosinaSyntaxError(`Invalid argument value has been set!`, node.info);
+      throw new GolosinaExceptions.Frontend.SyntaxError(`Invalid argument value has been set!`, node.info.start);
     };
 
     return node;
@@ -237,7 +235,25 @@ class SemanticValidator {
 
   public validateConstant(node: SyntaxTree.VariableNode) {
     if (!node.init && node.isConst) {
-      throw new GolosinaSyntaxError(`Uninitialized constant at "${node.ident.name}"`, node.info);
+      throw new GolosinaExceptions.Frontend.SyntaxError(`Uninitialized constant at "${node.ident.name}"`, node.info.start);
+    };
+  };
+
+  public validateBreak(info: TokenInformation) {
+    if (!this.state.inLoop && !this.state.inCase) {
+      throw new GolosinaExceptions.Frontend.SyntaxError(`Encountered an unexpected "break" statement outside of a loop or case statement!`, info.start);
+    };
+  };
+
+  public validateContinue(info: TokenInformation) {
+    if (!this.state.inLoop) {
+      throw new GolosinaExceptions.Frontend.SyntaxError(`Encountered an unexpected "continue" statement oustide of a loop!`, info.start);
+    };
+  };
+
+  public validateMethod(info: LinePosition) {
+    if (!this.state.inObj) {
+      throw new GolosinaExceptions.Frontend.SyntaxError(`Encountered a "method" expression outside of an object!`, info);
     };
   };
 };

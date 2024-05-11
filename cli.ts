@@ -1,20 +1,12 @@
+import Interpreter from "./src/interpreter";
+import Debug from "./src/debug"
 import process from "node:process";
 import fs from "node:fs";
-import Lexer from "./src/frontend/lexer"
-import Parser from "./src/frontend/parser"
-import Debug from "./src/debug"
-import Walker  from "./src/runtime/interpreter/walker"
 
 class GolosinaCommandLineInterface {
-  private lexer: Lexer;
-  private parser: Parser;
-  private walker: Walker;
   private debug: Debug;
       
   constructor() {
-    this.lexer = new Lexer();
-    this.parser = new Parser();
-    this.walker = new Walker();
     this.debug = new Debug();
   };
 
@@ -52,24 +44,24 @@ class GolosinaCommandLineInterface {
           throw new Error(`Invalid path to file "${path}"!`);
         };
 
-        this.lexer.setSource = data;
+        Interpreter.lexer.setSource = data;
 
-        const tokens = this.lexer.execute();
-
+        const tokens = Interpreter.lexer.execute();
+        
         if (state.dumpTokens) {
           this.debug.logTokens(tokens);
         };
 
-        this.parser.setSource = tokens;
+        Interpreter.parser.setSource = tokens;
 
-        const tree = this.parser.generateAST();
-      
+        const tree = Interpreter.parser.generateAST();
+        
         if (state.dumpAST) {
           this.debug.logAST(tree);
         };
 
-        this.walker.setSource = tree;
-        this.walker.execute();
+        Interpreter.walker.setSource = tree;
+        Interpreter.walker.execute();
       });
     }; 
   };
