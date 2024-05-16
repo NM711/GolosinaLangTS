@@ -22,14 +22,13 @@ class Repl {
       };
 
       try {
-        Interpreter.lexer.setSource = input;
-        Interpreter.parser.setSource = Interpreter.lexer.execute();
-        Interpreter.walker.setSource = Interpreter.parser.generateAST();
-        Interpreter.walker.execute();
+        Interpreter.parser.setSource(input, false);
+        Interpreter.walker.setSource = Interpreter.parser.execute();
+        // Interpreter.walker.execute();
         this.recall();
 
       } catch (e) {
-
+        console.log(e)
       }
     });
   };

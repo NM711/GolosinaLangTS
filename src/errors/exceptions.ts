@@ -3,11 +3,6 @@ import { EnvironmentErrorState } from "../runtime/core/environment";
 import { LinePosition, TokenInformation } from "../frontend/lexer/token";
 
 namespace GolosinaExceptions {
-
-  function formatLinePosition(at: LinePosition) {
-    return styleText("yellow", `line: ${at.line}, char: ${at.char}`);
-  };
-
   export namespace Runtime {
     export class EnvironmentError extends Error {
       constructor(ident: string, code: EnvironmentErrorState) {
@@ -48,17 +43,23 @@ namespace GolosinaExceptions {
   };
 
   export namespace Frontend {
+       
     export class SyntaxError extends Error {
-      public at: LinePosition;
-      public start: LinePosition | undefined;
-      public end: LinePosition | undefined;
+      public at: TokenInformation;
+      public startOffset: number;
+      public endOffset: number;
+      public file: string;
+      public input: string[];
       public startIndex: number;
-      public endIndex: number;      
-      constructor(message: string, at: LinePosition) {
+      public endIndex: number;
+            
+      constructor(message: string, at: TokenInformation, file: string, input: string[]) {
         super(message);
         this.at = at;
+        this.file = file;
+        this.input = input;
         this.name = "SyntaxError";
-      }
+      };
     };
   };
 

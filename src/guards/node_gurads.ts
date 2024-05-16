@@ -37,6 +37,7 @@ class TreeNodeTypeGuard {
   public static isMethod(node: SyntaxTree.BaseNodeAST): node is SyntaxTree.MethodExpressionNode {
     return node.id === NodeIdentifiers.N_METHOD_EXPR;
   };
+
 };
 
 export default TreeNodeTypeGuard;

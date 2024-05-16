@@ -1,26 +1,171 @@
 import GolosinaExceptions from "../../errors/exceptions";
-import TreeNodeTypeGuard from "../../guards/node_gurads";
 import SemanticValidator from "./semantic_validator";
 import ErrorReporter from "../../errors/reporter";
+import Lexer from "../lexer/lexer";
+import fs from "node:fs";
 import { SyntaxTree } from "./ast";
 import { TokenIdentifiers } from "../../types/token.types";
-import { LinePosition, Token } from "../lexer/token";
+import { Token } from "../lexer/token";
 import { DataType } from "../../common";
+
+
+class Helpers {
+  public isArrow(token: Token) {
+    return token.id === TokenIdentifiers.ARROW;
+  };
+
+  public isLeftParen(token: Token) {
+    return token.id === TokenIdentifiers.LEFT_PARENTHESIS;
+  };
+
+  public isRightParen(token: Token) {
+    return token.id === TokenIdentifiers.RIGHT_PARENTHESIS;
+  };
+
+  public isRightCurly(token: Token) {
+    return token.id === TokenIdentifiers.RIGHT_CURLY;
+  };
+
+  public isSemicolon(token: Token) {
+    return token.id === TokenIdentifiers.SEMICOLON;
+  };
+
+  public isSeperator(token: Token) {
+    return token.id === TokenIdentifiers.SEPERATOR;
+  };
+
+  public isUnIncrement(token: Token) {
+    return token.id === TokenIdentifiers.UNARY_INCREMENT;
+  };
+
+  public isUnDecrement(token: Token) {
+    return token.id === TokenIdentifiers.UNARY_DECREMENT;
+  };
+
+  public isUnNot(token: Token) {
+    return token.id === TokenIdentifiers.UNARY_NOT;
+  };
+
+  public isPostfix(token: Token) {
+    return this.isUnIncrement(token) || this.isUnDecrement(token);
+  };
+
+  public isPrefix(token: Token) {
+    return this.isPostfix(token) || token.id === TokenIdentifiers.UNARY_NOT || token.id === TokenIdentifiers.BINARY_ADDITION || token.id === TokenIdentifiers.BINARY_SUBTRACTION;
+  };
+
+  public isMultiplicative(token: Token) {
+    return token.id === TokenIdentifiers.BINARY_MULTIPLICATION || token.id === TokenIdentifiers.BINARY_DIVISION || token.id === TokenIdentifiers.BINARY_MODULUS;
+  };
+
+  public isAdditive(token: Token) {
+    return token.id === TokenIdentifiers.BINARY_ADDITION || token.id === TokenIdentifiers.BINARY_SUBTRACTION;
+  };
+
+  public isRelational(token: Token) {
+    return token.id === TokenIdentifiers.BINARY_GT || token.id === TokenIdentifiers.BINARY_GT_EQ || token.id === TokenIdentifiers.BINARY_LT || token.id === TokenIdentifiers.BINARY_LT_EQ;
+  };
+
+  public isEquality(token: Token) {
+    return token.id === TokenIdentifiers.BINARY_EQUALITY || token.id === TokenIdentifiers.BINARY_NOT_EQUALITY;
+  };
+
+  public isLogicalOr(token: Token) {
+    return token.id === TokenIdentifiers.BINARY_OR;
+  };
+
+  public isLogicalAnd(token: Token) {
+    return token.id === TokenIdentifiers.BINARY_AND;
+  };
+
+  public isIf(token: Token) {
+    return token.id === TokenIdentifiers.IF;
+  };
+
+  public isElse(token: Token) {
+    return token.id === TokenIdentifiers.ELSE;
+  };
+};
+
+class Tracking {
+  public startIndex: number;
+  public endIndex: number;
+  public startOffset: number;
+  public endOffset: number;
+  
+  public updateStart(index: number, offset: number) {
+    this.startIndex = index;
+    this.startOffset = offset;
+  };
+
+  public updateEnd(index: number, offset: number) {
+    this.endIndex = index;
+    this.endOffset = offset;
+  };
+
+  constructor() {
+    this.startIndex = 0;
+    this.endIndex = 0;
+    this.startOffset = 0;
+    this.endOffset = 0;
+  };
+};
+
+class ParserFileData {
+  // current file the parser is parsing
+  public file: string;
+  // paths that have been imported and what not
+  public recordedPaths: Set<string>;
+
+  constructor() {
+    this.recordedPaths = new Set([]);
+    this.file = "<repl>";
+  };
+};
 
 class Parser {
   private program: SyntaxTree.Program;
+  private lexer: Lexer;
+  private helpers: Helpers;
   private validator: SemanticValidator;
   private tokens: Token[];
   private index: number;
+  private track: Tracking;
+  private fileData: ParserFileData;
 
   constructor() {
-    this.program = [];
+    this.lexer = new Lexer();
+    this.helpers = new Helpers();
     this.validator = new SemanticValidator();
+    this.track = new Tracking();
+    this.fileData = new ParserFileData();
+    this.program = [];
     this.index = 0;
   };
 
-  public set setSource(tokens: Token[]) {
-    this.tokens = tokens;
+  public setSource(inputOrPath: string, isPath: boolean) {
+    if (isPath) {
+      this.fileData.file = inputOrPath;
+      this.lexer.setSource = fs.readFileSync(inputOrPath, "utf-8");
+      
+      if (!this.fileData.recordedPaths.has(inputOrPath)) {
+        this.fileData.recordedPaths.add(inputOrPath);
+      };
+
+    } else {
+      this.lexer.setSource = inputOrPath;
+    };
+
+    this.tokens = this.lexer.execute();
+
+    // update validator data.
+    
+    this.validator.setFile = this.fileData.file;
+    this.validator.setInput = this.lexer.input;
+  };
+
+  public get getTokens() {
+    return this.tokens;
   };
 
   private reset(): void {
@@ -43,88 +188,270 @@ class Parser {
     };
   };
 
-  private parsePrimary(): SyntaxTree.BaseNodeAST {
-    let token = this.look;
+  private parseLiteralExpr(): (SyntaxTree.BaseNodeAST | null) {
+    let node: SyntaxTree.BaseNodeAST | null = null;
 
     switch (this.look.id) {
-      case TokenIdentifiers.BOOLEAN_LITERAL:
-        this.eat();
-        return new SyntaxTree.LiteralNode(token.lexeme, DataType.T_BOOLEAN, token.info);
-      case TokenIdentifiers.INTEGER_LITERAL:
-        this.eat();
-        return new SyntaxTree.LiteralNode(this.look.lexeme, DataType.T_INTEGER, token.info);
-      case TokenIdentifiers.FLOAT_LITERAL:
-        this.eat();
-        return new SyntaxTree.LiteralNode(token.lexeme, DataType.T_FLOAT, token.info);
-      case TokenIdentifiers.NULL:
-        this.eat();
-        return new SyntaxTree.LiteralNode(token.lexeme, DataType.T_NULL, token.info);
       case TokenIdentifiers.STRING_LITERAL:
-        this.eat();
-        return new SyntaxTree.LiteralNode(token.lexeme, DataType.T_STRING, token.info);
+        node = new SyntaxTree.LiteralNode(this.look.lexeme, DataType.T_STRING, this.look.info);
+        break;
+
+      case TokenIdentifiers.BOOLEAN_LITERAL:
+        node = new SyntaxTree.LiteralNode(this.look.lexeme, DataType.T_BOOLEAN, this.look.info);
+        break;
+
+      case TokenIdentifiers.NULL_LITERAL:
+        node = new SyntaxTree.LiteralNode(this.look.lexeme, DataType.T_NULL, this.look.info);
+        break;
+
+      case TokenIdentifiers.INTEGER_LITERAL:
+        node = new SyntaxTree.LiteralNode(this.look.lexeme, DataType.T_INTEGER, this.look.info);
+        break;
+
+      case TokenIdentifiers.FLOAT_LITERAL:
+        node = new SyntaxTree.LiteralNode(this.look.lexeme, DataType.T_FLOAT, this.look.info);
+        break;
+
       case TokenIdentifiers.IDENT:
-        this.eat();
-        return new SyntaxTree.IdentfierNode(token.lexeme, token.info)
-      case TokenIdentifiers.CLONE:
-        return this.parseCloneExpr();
-      case TokenIdentifiers.METHOD:
-        return this.parseMethodExpr();
+        node = new SyntaxTree.IdentfierNode(this.look.lexeme, this.look.info);
+        break;
 
       default:
-        throw new GolosinaExceptions.Frontend.SyntaxError(`Unexpected primary expression start at "${this.look.lexeme}"!`, this.look.info.start);
+        return null;
+    };
+
+    this.eat();
+    return node;
+  };
+
+  private parseMemberPrimary() {
+    const literal = this.parseLiteralExpr();
+
+    if (literal) {
+      return literal;
+    } else if (this.look.id === TokenIdentifiers.CLONE) {
+      return this.parseCloneExpr();
+    } else if (this.look.id === TokenIdentifiers.METHOD) {
+      return this.parseMethodExpr();
+    } else {
+      throw new GolosinaExceptions.Frontend.SyntaxError(`Unexpected member primary expression start at "${this.look.lexeme}"!`, this.look.info, this.fileData.file, this.lexer.input);
     };
   };
 
-  private parseReturn(): SyntaxTree.ReturnStatementNode {
-    this.eat();
-    const returned = new SyntaxTree.ReturnStatementNode(this.look.info, this.validator.validateReturn(this.parseExpr()));
+  private parsePrimary(): SyntaxTree.BaseNodeAST {
+    const literal = this.parseLiteralExpr();
 
-    return returned;
+    if (literal) {
+      return literal;
+    } else if (this.look.id === TokenIdentifiers.CLONE) {
+      return this.parseCloneExpr();
+    } else {
+      throw new GolosinaExceptions.Frontend.SyntaxError(`Unexpected primary expression start at "${this.look.lexeme}"!`, this.look.info, this.fileData.file, this.lexer.input);
+    };
   };
 
-  private parseBlock(): SyntaxTree.BlockNode {
-    const block = new SyntaxTree.BlockNode(this.look.info);
+  private parseCloneExpr(): SyntaxTree.BaseNodeAST {
+    const expr = new SyntaxTree.CloneExpressionNode(this.look.info);
+    this.eat();
+
+    expr.cloning = this.validator.validateCloningInCloneExpr(this.parsePrimary());
 
     this.validator.expect.leftCurly(this.look);
     this.eat();
 
-    while (this.look.id !== TokenIdentifiers.RIGHT_CURLY) {
-      block.body.push(this.parse());
-      this.validator.expect.semicolon(this.look);
-      this.eat();
-    };
-
-    this.validator.expect.rightCurly(this.look);
-    this.eat();
-
-    return block;
-  };
-
-  private parseParams(params: SyntaxTree.IdentfierNode[]) {
     while (true) {
-      const ident = this.validator.expect.ident(this.parsePrimary(), "Parameter Identifier");
+      const member = new SyntaxTree.DirectMemberNode(this.look.info);
+      member.key = this.validator.expect.ident(this.parsePrimary(), "member key identifier!");
 
-      params.push(ident);
+      this.validator.expect.token(TokenIdentifiers.BINARY_ASSIGNMENT, "=", this.look);
+      this.eat();
 
-      if (this.index === this.tokens.length) {
-        throw new GolosinaExceptions.Frontend.SyntaxError(`Expected ")" but instead reached "EOF"!`, this.look.info.start);
-      };
+      member.value = this.parseMemberPrimary();
+      expr.members.push(member);
 
-      if (this.validator.tokenConditions.isRightParenthesis(this.look)) {
+      if (this.helpers.isRightCurly(this.look)) {
         break;
       };
 
       this.validator.expect.seperator(this.look);
       this.eat();
     };
-  };
 
-  private parseBreakStmnt(): SyntaxTree.BreakStatementNode {
-    this.validator.validateBreak(this.look.info);
-    const breakStmnt = new SyntaxTree.BreakStatementNode(this.look.info);
+    this.validator.expect.rightCurly(this.look);
     this.eat();
 
-    return breakStmnt;
+    return expr;
+  };
+
+  private parseMethodExpr(): SyntaxTree.BaseNodeAST {
+    const expr = new SyntaxTree.MethodExpressionNode(this.look.info);
+    this.eat();
+
+    this.validator.expect.leftParenthesis(this.look);
+    this.eat();
+
+    while (!this.helpers.isRightParen(this.look)) {
+      const param = this.validator.expect.ident(this.parsePrimary());
+      expr.params.push(param);
+
+      if (!this.helpers.isRightParen(this.look)) {
+        this.validator.expect.seperator(this.look);
+        this.eat();
+      };
+    };
+
+    this.validator.expect.rightParenthesis(this.look);
+    this.eat();
+
+    expr.block = this.parseBlockStmnt();
+
+    return expr;
+  };
+
+  private parseTopExpr(): SyntaxTree.BaseNodeAST {
+    if (!this.helpers.isLeftParen(this.look)) {
+      return this.parsePrimary();
+    };
+
+    const expr = new SyntaxTree.BinaryExpressionNode("GroupingExpression", this.look.info);
+    this.eat();
+    expr.rhs = this.parseExpr();
+
+    this.validator.expect.rightParenthesis(this.look);
+    this.eat();
+
+    return expr;
+  };
+
+  private applyMemberExprRule(lhs: SyntaxTree.BaseNodeAST) {
+    while (this.helpers.isArrow(this.look)) {
+      const expr = new SyntaxTree.MemberExpressionNode(lhs.info);
+      this.eat();
+      expr.parent = lhs;
+      expr.accessing = this.validator.expect.ident(this.parsePrimary(), "accessor identifier");
+      lhs = expr;
+    };
+
+    return lhs;
+  };
+
+  private applyCallExprRule(lhs: SyntaxTree.BaseNodeAST) {
+    const expr = new SyntaxTree.ExpressionCallNode(lhs.info);
+    expr.callee = this.validator.expect.memberOrIdent(lhs);
+    this.eat();
+
+    while (true) {
+      const arg = this.parseExpr();
+      expr.arguments.push(arg);
+
+      if (this.helpers.isRightParen(this.look)) {
+        break;
+      };
+
+      this.validator.expect.seperator(this.look);
+      this.eat();
+    };
+
+    this.validator.expect.rightParenthesis(this.look);
+    this.eat();
+
+    lhs = expr;
+
+    return lhs;
+  };
+
+  private applyPostfixExprRule(lhs: SyntaxTree.BaseNodeAST) {
+    const expr = new SyntaxTree.UnaryExpressionNode(lhs.info);
+    expr.op = this.look.lexeme;
+    this.eat();
+    expr.argument = lhs;
+    lhs = expr;
+
+    return lhs;
+  };
+
+
+  private parseCallAndAccessExpr() {
+    let lhs = this.parseTopExpr();
+
+    if (this.helpers.isArrow(this.look)) {
+      lhs = this.applyMemberExprRule(lhs);
+    };
+
+    if (this.helpers.isLeftParen(this.look)) {
+      lhs = this.applyCallExprRule(lhs);
+    };
+
+    if (this.helpers.isPostfix(this.look)) {
+      lhs = this.applyPostfixExprRule(lhs);
+    };
+
+    return lhs;
+  };
+
+  private parsePrefixExpr(): SyntaxTree.BaseNodeAST {
+
+    if (this.helpers.isPrefix(this.look)) {
+      const expr = new SyntaxTree.UnaryExpressionNode(this.look.info);
+      expr.isPrefix = true;
+      expr.op = this.look.lexeme;
+      this.eat();
+
+      expr.argument = this.parseCallAndAccessExpr();
+      return expr;
+    };
+
+
+    return this.parseCallAndAccessExpr();
+  };
+
+  private parseMultiplicativeExpr(): SyntaxTree.BaseNodeAST {
+    let lhs = this.parsePrefixExpr();
+
+    while (this.helpers.isMultiplicative(this.look)) {
+      const expr = new SyntaxTree.BinaryExpressionNode("MultiplicativeExpression", lhs.info);
+      expr.op = this.look.lexeme;
+      this.eat();
+
+      expr.lhs = lhs;
+      expr.rhs = this.parsePrefixExpr();
+
+      lhs = expr;
+    };
+
+    return lhs;
+  };
+
+  private parseAdditiveExpr(): SyntaxTree.BaseNodeAST {
+    let lhs = this.parseMultiplicativeExpr();
+
+    while (this.helpers.isAdditive(this.look)) {
+      const expr = new SyntaxTree.BinaryExpressionNode("AdditiveExpression", lhs.info);
+      expr.op = this.look.lexeme;
+      this.eat();
+
+      expr.lhs = lhs;
+      expr.rhs = this.parseMultiplicativeExpr();
+      lhs = expr;
+    };
+
+    return lhs;
+  };
+
+  private parseRelationalExpr(): SyntaxTree.BaseNodeAST {
+    let lhs = this.parseAdditiveExpr();
+
+    while (this.helpers.isRelational(this.look)) {
+      const expr = new SyntaxTree.BinaryExpressionNode("RelationalExpression", lhs.info);
+      expr.op = this.look.lexeme;
+      this.eat();
+
+      expr.lhs = lhs;
+      expr.rhs = this.parseAdditiveExpr();
+      lhs = expr;
+    };
+
+    return lhs;
   };
 
   private parseContinueStmnt(): SyntaxTree.ContinueStatementNode {
@@ -135,436 +462,308 @@ class Parser {
     return continueStmnt;
   };
 
-  private parseIfStmnt(): SyntaxTree.IfStatementNode {
-    const ifStmnt = new SyntaxTree.IfStatementNode(this.look.info);
+  private parseBreakStmnt(): SyntaxTree.BreakStatementNode {
+    this.validator.validateBreak(this.look.info);
+    const breakStmnt = new SyntaxTree.BreakStatementNode(this.look.info);
     this.eat();
 
-    this.validator.expect.leftParenthesis(this.look);
-    this.eat();
+    return breakStmnt;
+  };
 
-    ifStmnt.condition = this.parseExpr();
-    this.validator.expect.rightParenthesis(this.look);
-    this.eat();
+  private parseEqualityExpr(): SyntaxTree.BaseNodeAST {
+    let lhs = this.parseRelationalExpr();
 
-    ifStmnt.block = this.parseBlock();
-
-    if (this.validator.tokenConditions.isTokenID(TokenIdentifiers.ELSE, this.look)) {
+    while (this.helpers.isEquality(this.look)) {
+      const expr = new SyntaxTree.BinaryExpressionNode("EqualityExpression", lhs.info);
+      expr.op = this.look.lexeme;
       this.eat();
-      ifStmnt.alternate = (this.validator.tokenConditions.isTokenID(TokenIdentifiers.IF, this.look)) ? this.parseIfStmnt() : this.parseBlock();
+      expr.lhs = lhs;
+      expr.rhs = this.parseRelationalExpr();
+      lhs = expr;
     };
 
-    return ifStmnt;
-  };
-
-  private parseCaseStmnt(): SyntaxTree.CaseStatementNode {
-    this.validator.state.inCase = true;
-    const caseStmnt = new SyntaxTree.CaseStatementNode(this.look.info);
-    this.eat();
-
-    this.validator.expect.leftParenthesis(this.look);
-    this.eat();
-
-    caseStmnt.discriminant = this.parseExpr();
-
-    this.validator.expect.rightParenthesis(this.look);
-    this.eat();
-
-    this.validator.expect.leftCurly(this.look);
-    this.eat();
-
-    let defaultCounter: number = 0;
-
-    while (true) {
-      const caseTest = new SyntaxTree.CaseStatementTestNode(this.look.info);
-
-      if (!this.validator.tokenConditions.isCaseTest(this.look)) {
-        throw new GolosinaExceptions.Frontend.SyntaxError(`Expected a valid test within "case" statement!`, this.look.info.start);
-      };
-
-      if (this.validator.tokenConditions.isTokenID(TokenIdentifiers.DEFAULT, this.look)) {
-        ++defaultCounter;
-        this.eat();
-        caseTest.isDefault = true;
-        caseTest.block = this.parseBlock();
-      } else {
-        this.eat();
-        caseTest.condition = this.parseExpr();
-        caseTest.block = this.parseBlock();
-      };
-
-      caseStmnt.tests.push(caseTest);
-
-      if (!this.validator.tokenConditions.isCaseTest(this.look)) {
-        break;
-      };
-    };
-
-    if (defaultCounter > 1) {
-      throw new GolosinaExceptions.Frontend.SyntaxError(`Encountered more than one case "default"!`, caseStmnt.info.start);
-    };
-
-    this.validator.expect.rightCurly(this.look);
-    this.eat();
-    this.validator.state.inCase = false;
-    return caseStmnt;
-  };
-
-  private parseForStmnt(): SyntaxTree.ForStatementNode {
-    this.validator.state.inLoop = true;
-    const forStmnt = new SyntaxTree.ForStatementNode(this.look.info);
-    this.eat();
-
-    this.validator.expect.leftParenthesis(this.look);
-    this.eat();
-
-    forStmnt.init = this.parse();
-    this.validator.expect.semicolon(this.look);
-    this.eat();
-    forStmnt.condition = this.parseExpr();
-    this.validator.expect.semicolon(this.look);
-    this.eat();
-    forStmnt.update = this.parseExpr();
-    this.validator.expect.rightParenthesis(this.look);
-    this.eat();
-    forStmnt.block = this.parseBlock();
-
-    this.validator.state.inLoop = false;
-    return forStmnt;
-  };
-
-  private parseWhileStmnt(): SyntaxTree.WhileStatementNode {
-    const whileStmnt = new SyntaxTree.WhileStatementNode(this.look.info);
-    this.eat();
-
-    this.validator.expect.leftParenthesis(this.look);
-    this.eat();
-
-    whileStmnt.condition = this.parseExpr();
-
-    this.validator.expect.rightParenthesis(this.look);
-    this.eat();
-
-    whileStmnt.block = this.parseBlock();
-
-    return whileStmnt;
-  };
-
-  private parseMethodExpr(): SyntaxTree.BaseNodeAST {
-    this.validator.state.inMethod = true;
-    const method = new SyntaxTree.MethodExpressionNode(this.look.info);
-    this.eat();
-
-    this.validator.expect.leftParenthesis(this.look);
-    this.eat();
-
-    if (!this.validator.tokenConditions.isRightParenthesis(this.look)) {
-      this.parseParams(method.params);
-    };
-
-    this.validator.expect.rightParenthesis(this.look);
-    this.eat();
-
-    method.block = this.parseBlock();
-    this.validator.state.inMethod = false;
-    return method;
-  };
-
-  private parseVar(): SyntaxTree.BaseNodeAST {
-    const variable = new SyntaxTree.VariableNode(this.look.info);
-
-    if (this.validator.tokenConditions.isTokenID(TokenIdentifiers.CONST, this.look)) {
-      variable.isConst = true;
-    };
-
-    this.eat();
-
-    variable.ident = this.validator.expect.ident(this.parsePrimary(), "Variable Identifier");
-
-    if (this.validator.tokenConditions.isTokenID(TokenIdentifiers.BINARY_ASSIGNMENT, this.look)) {
-      this.eat();
-      variable.init = this.parseExpr();
-    };
-
-    this.validator.validateConstant(variable);
-    return variable;
-  };
-
-  private parseObjectMembers(members: SyntaxTree.DirectMemberNode[]) {
-    while (true) {
-      const direct = new SyntaxTree.DirectMemberNode(this.look.info);
-
-      direct.key = this.validator.expect.ident(this.parsePrimary(), "Object Key Identfier");
-
-      this.validator.expect.token(TokenIdentifiers.BINARY_ASSIGNMENT, "=", this.look);
-      this.eat();
-
-      direct.value = this.validator.validateAssignmentRHS(this.parseExpr(), true);
-      members.push(direct);
-
-      if (this.index === this.tokens.length) {
-        throw new GolosinaExceptions.Frontend.SyntaxError(`Expected object end "}" but instead reached "EOF"!`, this.look.info.start);
-      };
-
-      if (this.validator.tokenConditions.isRightCurly(this.look)) {
-        break;
-      };
-
-      this.validator.expect.seperator(this.look);
-      this.eat();
-    };
-  };
-
-  private parseObjectExpr(): SyntaxTree.ObjectExpressionNode {
-    this.validator.state.inObj = true;
-    this.validator.expect.leftCurly(this.look);
-    const object = new SyntaxTree.ObjectExpressionNode(this.look.info);
-    this.eat();
-
-    if (!this.validator.tokenConditions.isTokenID(TokenIdentifiers.RIGHT_CURLY, this.look)) {
-      this.parseObjectMembers(object.members);
-    };
-
-    this.validator.expect.rightCurly(this.look);
-    this.eat();
-    this.validator.state.inObj = false;
-    return object;
-  };
-
-  private parseCloneExpr(): SyntaxTree.CloneExpressionNode {
-    const cloningExpr = new SyntaxTree.CloneExpressionNode(this.look.info);
-    this.eat();
-
-    cloningExpr.cloning = this.validator.expect.memberOrIdent(this.parseExpr(), "Clone Object Identifier");
-    cloningExpr.object = this.parseObjectExpr();
-
-    return cloningExpr;
-  };
-
-  private parseArguments(args: SyntaxTree.BaseNodeAST[]) {
-    while (true) {
-      const arg = this.validator.validateArgument(this.parseExpr());
-
-      args.push(arg);
-
-      if (this.index === this.tokens.length) {
-        throw new GolosinaExceptions.Frontend.SyntaxError(`Expected ")" but instead reached "EOF"!`, this.look.info.start);
-      };
-
-      if (this.validator.tokenConditions.isRightParenthesis(this.look)) {
-        break;
-      };
-
-      this.validator.expect.seperator(this.look);
-      this.eat();
-    };
-  };
-
-  private parseMemberExpr(): SyntaxTree.BaseNodeAST {
-    let lhs: SyntaxTree.BaseNodeAST = new SyntaxTree.UnaryExpressionNode(this.look.info);
-
-    if (!this.validator.tokenConditions.isPrefix(this.look)) {
-      lhs = this.parsePrimary();
-    };
-
-    while ((TreeNodeTypeGuard.isIdent(lhs) || TreeNodeTypeGuard.isMemberExpr(lhs)) && this.validator.tokenConditions.isArrow(this.look)) {
-      const memberExpr = new SyntaxTree.MemberExpressionNode(this.look.info);
-      // eat operator "->"
-      this.eat();
-      memberExpr.parent = lhs;
-
-      memberExpr.accessing = this.validator.expect.ident(this.parsePrimary(), `Member Accessor Identifier`);
-
-      lhs = memberExpr;
-    };
     return lhs;
-  };
+  }
 
-  private parseCallExpr(): SyntaxTree.BaseNodeAST {
-    let lhs: SyntaxTree.BaseNodeAST = this.parseMemberExpr();
+  private parseLogicalExpr() {
+    let lhs = this.parseEqualityExpr();
 
-    if (this.validator.tokenConditions.isLeftParenthesis(this.look)) {
-      const call = new SyntaxTree.ExpressionCallNode(this.look.info);
+    while (this.helpers.isLogicalOr(this.look)) {
+      const expr = new SyntaxTree.BinaryExpressionNode("LogicalExpression", lhs.info);
+      expr.op = this.look.lexeme;
       this.eat();
+      expr.lhs = lhs;
+      expr.rhs = this.parseEqualityExpr();
+      lhs = expr;
 
-      call.callee = this.validator.validateCallExprCallee(lhs);
-
-      // parse arguments
-
-      if (!this.validator.tokenConditions.isRightParenthesis(this.look)) {
-        this.parseArguments(call.arguments);
-      };
-
-      this.validator.expect.rightParenthesis(this.look);
-      this.eat();
-
-      lhs = call;
     };
-    return lhs;
-  };
 
-  private parsePostfix(): SyntaxTree.BaseNodeAST {
-    let lhs: SyntaxTree.BaseNodeAST = this.parseCallExpr();
-    if ((TreeNodeTypeGuard.isIdent(lhs) || TreeNodeTypeGuard.isMemberExpr(lhs)) && this.validator.tokenConditions.isPostfix(this.look)) {
-      const unary = new SyntaxTree.UnaryExpressionNode(this.look.info);
-      unary.argument = lhs;
-      unary.op = this.look.lexeme;
+    while (this.helpers.isLogicalAnd(this.look)) {
+      const expr = new SyntaxTree.BinaryExpressionNode("LogicalExpression", lhs.info);
+      expr.op = this.look.lexeme;
       this.eat();
-
-      lhs = unary;
-    };
-    return lhs;
-  };
-
-  private parsePrefix(): SyntaxTree.BaseNodeAST {
-    let lhs: SyntaxTree.BaseNodeAST = this.parsePostfix();
-
-    if (this.validator.tokenConditions.isPrefix(this.look)) {
-      const unary = new SyntaxTree.UnaryExpressionNode(this.look.info);
-      unary.isPrefix = true;
-      unary.op = this.look.lexeme;
-      this.eat();
-      unary.argument = this.validator.expect.memberOrIdent(this.parseExpr());
-      lhs = unary;
+      expr.lhs = lhs;
+      expr.rhs = this.parseEqualityExpr();
+      lhs = expr;
     };
 
     return lhs;
   };
 
-  private parseMultiplicative(): SyntaxTree.BaseNodeAST {
-    let lhs: SyntaxTree.BaseNodeAST = this.parsePrefix();
+  private parseAssignmentExpr(): SyntaxTree.BaseNodeAST {
+    let lhs = this.parseLogicalExpr();
 
-    while (this.validator.tokenConditions.isMultiplicative(this.look)) {
-      const binary = new SyntaxTree.BinaryExpressionNode("BinaryExpression", this.look.info);
-      binary.lhs = lhs;
-      binary.op = this.look.lexeme;
+    if (this.look.id === TokenIdentifiers.BINARY_ASSIGNMENT) {
+      const expr = new SyntaxTree.AssignmentExpressionNode(lhs.info);
+      expr.op = this.look.lexeme;
       this.eat();
-      binary.rhs = this.parseMemberExpr();
 
-      lhs = binary;
-    };
+      expr.rhs = this.parseExpr();
 
-    return lhs
-  };
-
-  private parseAdditive(): SyntaxTree.BaseNodeAST {
-    let lhs: SyntaxTree.BaseNodeAST = this.parseMultiplicative();
-
-    while (this.validator.tokenConditions.isAdditive(this.look)) {
-      const binary = new SyntaxTree.BinaryExpressionNode("BinaryExpression", this.look.info);
-      binary.lhs = lhs;
-      binary.op = this.look.lexeme;
-      this.eat();
-      binary.rhs = this.parseMultiplicative();
-      lhs = binary;
-    };
-    return lhs
-  };
-
-  private parseRelational(): SyntaxTree.BaseNodeAST {
-    let lhs: SyntaxTree.BaseNodeAST = this.parseAdditive();
-
-    while (this.validator.tokenConditions.isRelational(this.look)) {
-      const binary = new SyntaxTree.BinaryExpressionNode("RelationalBinaryExpression", this.look.info);
-      binary.lhs = lhs;
-      binary.op = this.look.lexeme;
-      this.eat();
-      binary.rhs = this.parseAdditive();
-      lhs = binary;
-    };
-
-    return lhs
-
-  };
-
-  private parseEquality(): SyntaxTree.BaseNodeAST {
-    let lhs = this.parseRelational();
-
-    while (this.validator.tokenConditions.isEquality(this.look)) {
-      const binary = new SyntaxTree.BinaryExpressionNode("EqualityBinaryExpression", this.look.info);
-      binary.lhs = lhs;
-      binary.op = this.look.lexeme;
-      this.eat();
-      binary.rhs = this.parseRelational();
-      lhs = binary;
+      lhs = expr;
     };
 
     return lhs;
   };
 
-  private parseLogical(): SyntaxTree.BaseNodeAST {
-    let lhs = this.parseEquality();
-
-    while (this.validator.tokenConditions.isTokenID(TokenIdentifiers.BINARY_AND, this.look)) {
-      const binary = new SyntaxTree.BinaryExpressionNode("LogicalBinaryExpression", this.look.info);
-      binary.lhs = lhs;
-      binary.op = this.look.lexeme;
-      this.eat();
-      binary.rhs = this.parseEquality();
-      lhs = binary;
-    };
-
-    while (this.validator.tokenConditions.isTokenID(TokenIdentifiers.BINARY_OR, this.look)) {
-      const binary = new SyntaxTree.BinaryExpressionNode("LogicalBinaryExpression", this.look.info);
-      binary.lhs = lhs;
-      binary.op = this.look.lexeme;
-      this.eat();
-      binary.rhs = this.parseEquality();
-      lhs = binary;
-    };
-
-    return lhs;
-  };
-
-  private parseAssignment(): SyntaxTree.BaseNodeAST {
-    let lhs = this.parseLogical();
-
-    if (this.validator.tokenConditions.isTokenID(TokenIdentifiers.BINARY_ASSIGNMENT, this.look)) {
-      const assignment = new SyntaxTree.AssignmentExpressionNode(this.look.info);
-
-      assignment.lhs = this.validator.validateAssignmentLHS(lhs);
-      assignment.op = this.look.lexeme;
-      this.eat();
-      assignment.rhs = this.validator.validateAssignmentRHS(this.parseExpr());
-      lhs = assignment;
-    };
-
-    return lhs;
-  };
 
   private parseExpr(): SyntaxTree.BaseNodeAST {
-    return this.parseAssignment();
+    return this.parseAssignmentExpr();
   };
 
-  private parse(): SyntaxTree.BaseNodeAST {
+  private parseReturnStmnt(): SyntaxTree.BaseNodeAST {
+    const stmnt = new SyntaxTree.ReturnStatementNode(this.look.info);
+    this.eat();
+
+    stmnt.expr = this.parseExpr();
+
+    return stmnt;
+  };
+
+  private parseBlockStmnt(): SyntaxTree.BaseNodeAST {
+    this.validator.expect.leftCurly(this.look);
+    const stmnt = new SyntaxTree.BlockStatementNode(this.look.info);
+    this.eat();
+
+    while (!this.helpers.isRightCurly(this.look)) {
+      stmnt.body.push(this.parseStmntLow());
+      this.validator.expect.semicolon(this.look);
+      this.eat();
+    };
+
+    this.validator.expect.rightCurly(this.look);
+    this.eat();
+
+    return stmnt;
+  };
+
+  private parseWhileStmnt(): SyntaxTree.BaseNodeAST {
+    const stmnt = new SyntaxTree.WhileStatementNode(this.look.info);
+    this.eat();
+
+    this.validator.expect.leftParenthesis(this.look);
+    this.eat();
+
+    stmnt.condition = this.parseExpr();
+
+    this.validator.expect.rightParenthesis(this.look);
+    this.eat();
+
+    stmnt.block = this.parseBlockStmnt();
+
+    return stmnt;
+  };
+
+  private parseForStmnt(): SyntaxTree.BaseNodeAST {
+    const stmnt = new SyntaxTree.ForStatementNode(this.look.info);
+    this.eat();
+
+    this.validator.expect.leftParenthesis(this.look);
+    this.eat();
+
+    stmnt.init = this.parseStmntLow();
+
+    this.validator.expect.semicolon(this.look);
+    this.eat();
+
+    stmnt.condition = this.parseExpr();
+
+    this.validator.expect.semicolon(this.look);
+    this.eat();
+
+    stmnt.update = this.parseExpr();
+
+    this.validator.expect.rightParenthesis(this.look);
+    this.eat();
+
+
+    stmnt.block = this.parseBlockStmnt();
+
+    return stmnt;
+  };
+
+  private parseCaseStmnt(): SyntaxTree.BaseNodeAST {
+    const stmnt = new SyntaxTree.CaseStatementNode(this.look.info);
+    this.eat();
+
+    this.validator.expect.leftParenthesis(this.look);
+    this.eat();
+
+    stmnt.discriminant = this.parseExpr();
+
+    this.validator.expect.rightParenthesis(this.look);
+    this.eat();
+
+    this.validator.expect.leftCurly(this.look);
+    this.eat();
+
+    let defaultsCounted: number = 0;
+
+    while (!this.helpers.isRightCurly(this.look)) {
+      const test = new SyntaxTree.CaseStatementTestNode(this.look.info);
+
+      this.validator.expect.test(this.look);
+
+      if (this.look.id === TokenIdentifiers.DEFAULT) {
+        ++defaultsCounted;
+        test.isDefault = true;
+        this.eat();
+
+        test.block = this.parseBlockStmnt();
+
+      } else {
+        this.eat();
+        test.condition = this.parseExpr();
+        test.block = this.parseBlockStmnt();
+      };
+
+      stmnt.tests.push(test);
+    };
+
+    if (this.look.id === TokenIdentifiers.DEFAULT && defaultsCounted > 1) {
+      throw new GolosinaExceptions.Frontend.SyntaxError(`Encountered more than one case "default"!`, stmnt.info, this.fileData.file, this.lexer.input);
+    };
+
+    this.validator.expect.rightCurly(this.look);
+    this.eat();
+
+    return stmnt;
+  };
+
+  private parseIfStmnt(): SyntaxTree.BaseNodeAST {
+    const stmnt = new SyntaxTree.IfStatementNode(this.look.info);
+    this.eat();
+
+    this.validator.expect.leftParenthesis(this.look);
+    this.eat();
+
+    stmnt.condition = this.parseExpr();
+
+    this.validator.expect.rightParenthesis(this.look);
+    this.eat();
+
+    if (this.helpers.isElse(this.look)) {
+      this.eat();
+      stmnt.alternate = (this.helpers.isIf(this.look)) ? this.parseIfStmnt() : this.parseBlockStmnt();
+    };
+
+    return stmnt;
+
+  };
+
+  private parseVarDecStmnt(): SyntaxTree.BaseNodeAST {
+    const stmnt = new SyntaxTree.VariableDeclarationStatementNode(this.look.info);
+
+    if (this.look.id === TokenIdentifiers.CONST) {
+      stmnt.isConst = true;
+    };
+
+    this.eat();
+
+    stmnt.ident = this.validator.expect.ident(this.parsePrimary(), "variable/constant identifier");
+    
+    if (!this.helpers.isSemicolon(this.look)) {
+      this.validator.expect.token(TokenIdentifiers.BINARY_ASSIGNMENT, "=", this.look);
+      this.eat();
+      stmnt.init = this.validator.validateVarInit(this.parseExpr());
+    };
+
+    this.validator.validateConstant(stmnt);
+
+    return stmnt;
+  };
+
+  private parseExportStmnt(): SyntaxTree.BaseNodeAST {
+    const stmnt = new SyntaxTree.ExportStatementNode(this.look.info);
+    this.eat();
+    this.validator.expect.declaration(this.look);
+    stmnt.declaration = this.parseVarDecStmnt()
+
+    return stmnt;
+  };
+
+  private parseImportStmnt(): SyntaxTree.BaseNodeAST {
+    const stmnt = new SyntaxTree.ImportStatementNode(this.look.info);
+    this.eat();
+
+    this.validator.expect.token(TokenIdentifiers.STRING_LITERAL, "module string literal path", this.look);
+    stmnt.path = this.look.lexeme;
+    this.eat();
+
+    return stmnt;
+  };
+
+
+  private parseStmntTop(): SyntaxTree.BaseNodeAST | undefined {
+    if (this.fileData.recordedPaths.size !== 0) {
+      this.validator.expect.module(this.look);
+      const stmnt = new SyntaxTree.ModuleStatemenetNode(this.look.info);
+      this.eat();
+      stmnt.ident = this.validator.expect.ident(this.parsePrimary(), "module identifier");
+      return stmnt;
+    };
+  };
+
+  private parseStmntMid(): SyntaxTree.BaseNodeAST {
+    switch (this.look.id) {
+      case TokenIdentifiers.EXPORT:
+        return this.parseExportStmnt();
+      case TokenIdentifiers.IMPORT:
+        return this.parseImportStmnt();
+      default:
+        return this.parseStmntLow();
+    };
+  };
+
+  private parseStmntLow(): SyntaxTree.BaseNodeAST {
+    this.track.updateStart(this.index, this.look.info.offset.start);
     switch (this.look.id) {
       case TokenIdentifiers.LET:
       case TokenIdentifiers.CONST:
-        return this.parseVar()
-
-      case TokenIdentifiers.BREAK:
-        return this.parseBreakStmnt();
-
-      case TokenIdentifiers.CONTINUE:
-        return this.parseContinueStmnt();
-
+        return this.parseVarDecStmnt();
       case TokenIdentifiers.IF:
         return this.parseIfStmnt();
-
-      case TokenIdentifiers.FOR:
-        return this.parseForStmnt();
-
-      case TokenIdentifiers.WHILE:
-        return this.parseWhileStmnt();
-
-      case TokenIdentifiers.RETURN:
-        return this.parseReturn();
-
       case TokenIdentifiers.CASE:
         return this.parseCaseStmnt();
-
+      case TokenIdentifiers.FOR:
+        return this.parseForStmnt();
+      case TokenIdentifiers.WHILE:
+        return this.parseWhileStmnt();
+      case TokenIdentifiers.BREAK:
+        return this.parseBreakStmnt();
+      case TokenIdentifiers.CONTINUE:
+        return this.parseContinueStmnt();
+      case TokenIdentifiers.RETURN:
+        return this.parseReturnStmnt();
+      case TokenIdentifiers.LEFT_CURLY:
+        return this.parseBlockStmnt();
       default:
-        return this.parseExpr()
+        return this.parseExpr();
     };
+  };
+
+  private parse(): SyntaxTree.BaseNodeAST {
+    return this.parseStmntMid();
   };
 
   /*
@@ -573,52 +772,55 @@ class Parser {
 
   private synchronize() {
     while (this.index < this.tokens.length) {
-      // eat till we reach the next statement.
-      this.eat();
       switch (this.look.id) {
         case TokenIdentifiers.LET:
         case TokenIdentifiers.CONST:
+        case TokenIdentifiers.IF:
+        case TokenIdentifiers.CASE:
         case TokenIdentifiers.FOR:
         case TokenIdentifiers.WHILE:
-        case TokenIdentifiers.IF:
-        case TokenIdentifiers.RETURN:
-        case TokenIdentifiers.CASE:
         case TokenIdentifiers.BREAK:
         case TokenIdentifiers.CONTINUE:
-        return;
+        case TokenIdentifiers.RETURN:
+        case TokenIdentifiers.LEFT_CURLY:
+        case TokenIdentifiers.IMPORT:
+        case TokenIdentifiers.EXPORT:
+        case TokenIdentifiers.MODULE:
+        case TokenIdentifiers.SEMICOLON:
+          return;
       };
+
+      this.eat();
     };
   };
 
-  public generateAST(): SyntaxTree.Program {
-    let start: LinePosition | undefined;
-    let end: LinePosition | undefined;
-    let startIndex: number = 0;
-    let endIndex: number = 0;
-        
+  public execute(): SyntaxTree.Program {
     while (this.index < this.tokens.length) {
       try {
-        startIndex = this.index;
-        start = this.tokens[this.index].info.start as LinePosition;
-        this.program.push(this.parse());
+        if (this.index === 0) {
+          const topStmnt = this.parseStmntTop();
+
+          if (topStmnt) {
+            this.program.push(topStmnt);
+          };
+
+        } else {
+          this.program.push(this.parse());
+        };
+
         this.validator.expect.semicolon(this.look);
         this.eat();
-      
+
       } catch (e) {
         this.synchronize();
-        if (this.tokens[this.index]) {
-          endIndex = this.index;
-        } else {
-          endIndex = this.index - 1;
-        };
-        
-        end = this.tokens[endIndex].info.start as LinePosition;
-        
+        this.track.updateEnd(this.index, this.look.info.offset.end);
+
         if (e instanceof GolosinaExceptions.Frontend.SyntaxError) {
-          e.start = start;
-          e.end = end;
-          e.startIndex = startIndex;
-          e.endIndex = endIndex;
+          e.startOffset = this.track.startOffset;
+          e.endOffset = this.track.endOffset;
+          e.startIndex = this.track.startIndex;
+          e.endIndex = this.track.endIndex;
+          this.eat();
         };
 
         // push errors to unwind later.
@@ -626,10 +828,8 @@ class Parser {
       };
     };
 
-    // at the very end if, run the reporter. If there is any errors within the error stack. The reporter will gracefully exit after
-    // logging all of the errors and lines.
-    ErrorReporter.syntax(this.tokens);
-  
+    ErrorReporter.syntax();
+
     const program = this.program;
     this.reset();
     return program;

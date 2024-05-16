@@ -4,12 +4,14 @@ import { LinePosition, TokenInformation, Token } from "./token";
 class Lexer {
   private table: Map<string, TokenIdentifiers>;
   private tokens: Token[];
-  private input: string[];
+  private index: number;
+  public input: string[];
   private info: TokenInformation;
   private position: LinePosition;
       
   constructor() {
     this.tokens = [];
+    this.index = 0;
     this.position = new LinePosition();
     this.info = new TokenInformation();
     this.table = new Map();
@@ -26,24 +28,22 @@ class Lexer {
     this.table.set("return", TokenIdentifiers.RETURN);
     this.table.set("break", TokenIdentifiers.BREAK);
     this.table.set("continue", TokenIdentifiers.CONTINUE);
-    this.table.set("bool", TokenIdentifiers.BOOLEAN);
-    this.table.set("null", TokenIdentifiers.NULL);
-    this.table.set("int", TokenIdentifiers.INTEGER);
-    this.table.set("float", TokenIdentifiers.FLOAT);
-    this.table.set("string", TokenIdentifiers.STRING);
-    this.table.set("void", TokenIdentifiers.VOID);
+    this.table.set("null", TokenIdentifiers.NULL_LITERAL);
     this.table.set("clone", TokenIdentifiers.CLONE);
+    this.table.set("module", TokenIdentifiers.MODULE);
+    this.table.set("export", TokenIdentifiers.EXPORT);
+    this.table.set("import", TokenIdentifiers.IMPORT);
     this.table.set("true", TokenIdentifiers.BOOLEAN_LITERAL);
     this.table.set("false", TokenIdentifiers.BOOLEAN_LITERAL);
   };
 
   private peek(i: number = 0): string {
-    return this.input[i];
+    return this.input[this.index + i];
   };
 
   private eat(): void {
     this.updatePosition();
-    this.input.shift();
+    ++this.index;
   };
 
   private get isDigit(): boolean {
@@ -69,8 +69,10 @@ class Lexer {
   };
 
   private updateInfo(type: "end" | "start") {
-    this.info[type].line = this.position.line;
-    this.info[type].char = this.position.char;
+    this.info.position[type].line = this.position.line;
+    this.info.position[type].char = this.position.char;
+    this.info.offset[type] = this.index;
+    this.info.offset[type] = this.index;
   };
 
   private updatePosition(): void {
@@ -242,7 +244,7 @@ class Lexer {
 
   public execute(): Token[] {
 
-    while (this.input.length > 0) {
+    while (this.index < this.input.length) {
 
       if (this.peek() === " " || this.peek() === "\t" || this.peek() === "\n") {
         this.eat();
@@ -260,6 +262,7 @@ class Lexer {
 
     const tempTokens = this.tokens;
     this.tokens = [];
+
     return tempTokens;
   };
 };

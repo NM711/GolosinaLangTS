@@ -11,12 +11,26 @@ export class LinePosition {
 };
 
 export class TokenInformation {
-  public start: LinePosition;
-  public end: LinePosition;
+  public position: {
+    start: LinePosition;
+    end: LinePosition;
+  };
+
+  public offset: {
+    start: number;
+    end: number;
+  };
 
   constructor() {
-    this.start = new LinePosition();
-    this.end = new LinePosition();
+    this.position = {
+      start: new LinePosition(),
+      end: new LinePosition()
+    };
+
+    this.offset = {
+      start: 0,
+      end: 0
+    };
   };
 };
 
@@ -28,9 +42,16 @@ export class Token {
   constructor(id: TokenIdentifiers, lexeme: string, info: TokenInformation) {
     this.id = id;
     this.lexeme = lexeme;
-    this.info = {
-      start: new LinePosition(info.start.line, info.start.char),
-      end: new LinePosition(info.end.line, info.end.char)
+    this.info = new TokenInformation();
+    
+    this.info.position = {
+      start: new LinePosition(info.position.start.line, info.position.start.char),
+      end: new LinePosition(info.position.end.line, info.position.end.char)
+    };
+
+    this.info.offset = {
+      start: info.offset.start,
+      end: info.offset.end
     };
   };
 };

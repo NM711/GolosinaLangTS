@@ -8,6 +8,7 @@ export enum NodeIdentifiers {
   N_UNARY_EXPR,
   N_DIRECT_MEMBER,
   N_EXPR_CALL,
+  N_PAREN_EXPR,
   N_MEMBER_EXPR,
   N_IF_STMNT,
   N_FOR_STMNT,
@@ -18,14 +19,15 @@ export enum NodeIdentifiers {
   N_CLONE_EXPR,
   N_BREAK_STMNT,
   N_CONTINUE_STMNT,
-  N_MODULE,
+  N_MODULE_STMNT,
+  N_IMPORT_STMNT,
+  N_EXPORT_STMNT,
   N_IDENT,
   N_LITERAL,
   N_METHOD_EXPR,
   N_VARIABLE,
   N_DATA_TYPE,
-  N_OBJECT_EXPR,
-  N_BLOCK,
+  N_BLOCK_STMNT,
   N_ACCESSING,
 };
 
@@ -62,7 +64,7 @@ export namespace SyntaxTree {
   };
 
   export class UnaryExpressionNode extends BaseNodeAST {
-    public argument: IdentfierNode | MemberExpressionNode;
+    public argument: BaseNodeAST;
     public op: string;
     public isPrefix: boolean;
 
@@ -120,7 +122,7 @@ export namespace SyntaxTree {
     };
   };
 
-  export class VariableNode extends BaseNodeAST {
+  export class VariableDeclarationStatementNode extends BaseNodeAST {
     public isConst: boolean;
     public ident: IdentfierNode;
     public init: BaseNodeAST | null;
@@ -137,11 +139,11 @@ export namespace SyntaxTree {
     };
   };
 
-  export class BlockNode extends BaseNodeAST {
+  export class BlockStatementNode extends BaseNodeAST {
     public body: BaseNodeAST[];
 
     constructor(info: TokenInformation) {
-      super(NodeIdentifiers.N_BLOCK, "Block", info);
+      super(NodeIdentifiers.N_BLOCK_STMNT, "BlockStatement", info);
       this.body = [];
     };
 
@@ -150,10 +152,32 @@ export namespace SyntaxTree {
     };
   };
 
+  export class ExportStatementNode extends BaseNodeAST {
+    public declaration: BaseNodeAST;
+
+    constructor(info: TokenInformation) {
+      super(NodeIdentifiers.N_EXPORT_STMNT, "ExportStatement", info);
+    };
+
+    public accept(visitor: TreeVisitor): void {};
+  };
+
+  export class ImportStatementNode extends BaseNodeAST {
+    public path: string;
+
+    constructor(info: TokenInformation) {
+      super(NodeIdentifiers.N_IMPORT_STMNT, "ImportStatement", info);
+    };
+
+    public accept(visitor: TreeVisitor): void {
+      visitor.visitImportStmnt(this);  
+    };
+  };
+
   export class IfStatementNode extends BaseNodeAST {
-    public block: BlockNode;
+    public block: BaseNodeAST;
     public condition: BaseNodeAST;
-    public alternate: IfStatementNode | BlockNode;
+    public alternate: BaseNodeAST;
 
     constructor(info: TokenInformation) {
       super(NodeIdentifiers.N_IF_STMNT, "IfStmnt", info);
@@ -166,7 +190,7 @@ export namespace SyntaxTree {
 
   export class MethodExpressionNode extends BaseNodeAST {
     public params: IdentfierNode[];
-    public block: BlockNode;
+    public block: BaseNodeAST;
 
     constructor(info: TokenInformation) {
       super(NodeIdentifiers.N_METHOD_EXPR, "MethodExpression", info);
@@ -178,8 +202,21 @@ export namespace SyntaxTree {
     };
   };
 
+
+  export class ModuleStatemenetNode extends BaseNodeAST {
+    public ident: IdentfierNode;
+
+    constructor(info: TokenInformation) {
+      super(NodeIdentifiers.N_MODULE_STMNT, "ModuleStatement", info);
+    };
+
+    public accept(visitor: TreeVisitor): void {
+        visitor.visitModuleStmnt(this);
+    };
+  };
+
   export class MemberExpressionNode extends BaseNodeAST {
-    public parent: IdentfierNode | MemberExpressionNode;
+    public parent: BaseNodeAST;
     public accessing: IdentfierNode;
 
     constructor(info: TokenInformation) {
@@ -226,10 +263,10 @@ export namespace SyntaxTree {
   };
 
   export class ReturnStatementNode extends BaseNodeAST {
-    public value: BaseNodeAST;
-    constructor(info: TokenInformation, value: BaseNodeAST) {
+    public expr: BaseNodeAST;
+    
+    constructor(info: TokenInformation) {
       super(NodeIdentifiers.N_RETURN_STMNT, "ReturnStatement", info);
-      this.value = value;
     };
 
     public accept(visitor: TreeVisitor): void {
@@ -248,23 +285,13 @@ export namespace SyntaxTree {
     public accept(): void {};
   };
   
-  export class ObjectExpressionNode extends BaseNodeAST {
-    public members: DirectMemberNode[];
-    
-    constructor(info: TokenInformation) {
-      super(NodeIdentifiers.N_OBJECT_EXPR, "ObjectExpression", info);
-      this.members = [];
-    };
-
-    public accept(): void{};
-  };
-
   export class CloneExpressionNode extends BaseNodeAST {
     public cloning: IdentfierNode | MemberExpressionNode;
-    public object: ObjectExpressionNode;
+    public members: DirectMemberNode[];
 
     constructor(info: TokenInformation) {
       super(NodeIdentifiers.N_CLONE_EXPR, "CloneExpression", info);
+      this.members = [];
     };
 
     public accept(visitor: TreeVisitor): void {
@@ -276,7 +303,7 @@ export namespace SyntaxTree {
     public init: BaseNodeAST;
     public condition: BaseNodeAST;
     public update: BaseNodeAST;
-    public block: BlockNode;
+    public block: BaseNodeAST;
 
     constructor(info: TokenInformation) {
       super(NodeIdentifiers.N_FOR_STMNT, "ForStatement", info);
@@ -289,7 +316,7 @@ export namespace SyntaxTree {
 
   export class WhileStatementNode extends BaseNodeAST {
     public condition: BaseNodeAST;
-    public block: BlockNode;
+    public block: BaseNodeAST;
 
     constructor(info: TokenInformation) {
       super(NodeIdentifiers.N_WHILE_STMNT, "WhileStatement", info);
@@ -303,7 +330,7 @@ export namespace SyntaxTree {
   export class CaseStatementTestNode extends BaseNodeAST {
     public isDefault: boolean;
     public condition: BaseNodeAST | null;
-    public block: BlockNode;
+    public block: BaseNodeAST;
   
     constructor(info: TokenInformation) {
       super(NodeIdentifiers.N_CASE_TEST, "CaseTest", info);
@@ -311,8 +338,7 @@ export namespace SyntaxTree {
       this.condition = null;
     };
 
-    public accept(visitor: TreeVisitor): void {
-    };
+    public accept(visitor: TreeVisitor): void {};
   };
 
   export class CaseStatementNode extends BaseNodeAST {

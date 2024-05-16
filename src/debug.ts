@@ -3,9 +3,7 @@ import type { SyntaxTree } from "./frontend/parser/ast";
 
 class GolosinaDebug {
   public logTokens(tokens: Token[]): void {
-    for (const token of tokens) {
-      console.log(token);
-    };
+    console.log(JSON.stringify(tokens, null, 2));
   };
 
   public logAST(source: SyntaxTree.Program): void {

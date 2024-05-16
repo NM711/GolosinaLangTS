@@ -1,6 +1,5 @@
 import GolosinaExceptions from "./exceptions";
 import { styleText } from "util";
-import { Token } from "../frontend/lexer/token";
 
 class ErrorReporter {
   /*
@@ -22,52 +21,59 @@ class ErrorReporter {
     };
   };
 
-  public static syntax(tokens: Token[]) {
+  public static syntax() {
     if (ErrorReporter.syntaxErrors.length > 0) {
       for (const error of ErrorReporter.syntaxErrors) {
-        const formattedLineStart = styleText("gray", String(error.start?.line));
+        const formattedLineStart = styleText("gray", `${String(error.at.position.start.line)} | `);
 
-        // console.log(tokens.slice(error.startIndex, error.endIndex))
-        
-        process.stdout.write(`${formattedLineStart} ${styleText("gray", "|")} `);
+        process.stdout.write(`${formattedLineStart}`);
+        // temporary solution, later im gonna keep track of the character offset as well as the line + char number. For now we can just do this.
 
-        let atIndex: number = 0;
+        for (let i = error.startOffset; i < error.endOffset; ++i) {
+          const char = error.input[i];
 
-        for (let i = error.startIndex; i < error.endIndex; ++i) {
-          const token = tokens[i];
-          const isAtErrorLocation = (token.info.start.line === error.at.line) && (token.info.start.char === error.at.char);
-
-          if (isAtErrorLocation) {
-            atIndex = i;
+          if (char === "\n") {
+            break;
           };
 
-          // only write the line.
-
-          if (token.info.start.line === error.at.line) {
-            process.stdout.write(`${token.lexeme} `);
-          };
+          process.stdout.write(char);
         };
-
+        
         process.stdout.write("\n");
-        process.stdout.write(" ".repeat(String(error.start?.line).length));
-        process.stdout.write(" ".repeat(3));
+        process.stdout.write(" ".repeat(String(error.at.position.start.line).length + 3));
 
-        for (let i = error.startIndex; i < error.endIndex; ++i) {
-          const token = tokens[i];
+        let isInRange = false;
+        
+        for (let i = error.startOffset; i < error.endOffset; ++i) {
 
-          if (i === atIndex) {
-            process.stdout.write(`${"^".repeat(token.lexeme.length)} `)
+          if (i === error.at.offset.start) {
+            isInRange = true;
+          };
+          
+          if (i === error.at.offset.end) {
+            isInRange= false;  
+          };
+
+          
+          if (!isInRange) {
+            process.stdout.write(" ");
           } else {
-            process.stdout.write(" ".repeat(token.lexeme.length));
+            process.stdout.write(styleText("redBright","^".repeat(error.input[i].length)))
           };
         };
-        
-        process.stdout.write("\n");
 
-        process.stdout.write(" ".repeat(String(error.at.line).length));
-        process.stdout.write(" ".repeat(3));
-        
-        process.stdout.write(styleText("bold", `${error.name}: ${error.message}`));
+
+        process.stdout.write(" ".repeat(String(error.at.position.start.line).length + 3));
+
+        process.stdout.write("\n\n");
+        process.stdout.write(" ".repeat(String(error.at.position.start.line).length + 3));
+
+        process.stdout.write(`${styleText("bgRed", `${error.name}:`)} ${styleText("bold", `${error.message}\n\n`)}`);
+
+        const formattedFileName = styleText("bold", `"${error.file}"`);
+        process.stdout.write(" ".repeat(String(error.at.position.start.line).length + 3));
+
+        process.stdout.write(`In File: ${formattedFileName} at (line: ${error.at.position.start.line}, char: ${error.at.position.start.char})`);
 
         process.stdout.write("\n\n");
       };

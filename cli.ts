@@ -1,7 +1,6 @@
 import Interpreter from "./src/interpreter";
 import Debug from "./src/debug"
 import process from "node:process";
-import fs from "node:fs";
 
 class GolosinaCommandLineInterface {
   private debug: Debug;
@@ -39,30 +38,21 @@ class GolosinaCommandLineInterface {
     };
 
     for (const path of paths) {
-      fs.readFile(path, "utf-8", (err, data) => {
-        if (err) {
-          throw new Error(`Invalid path to file "${path}"!`);
-        };
 
-        Interpreter.lexer.setSource = data;
+      Interpreter.parser.setSource(path, true);
+      
+      if (state.dumpTokens) {
+        this.debug.logTokens(Interpreter.parser.getTokens);  
+      };
 
-        const tokens = Interpreter.lexer.execute();
-        
-        if (state.dumpTokens) {
-          this.debug.logTokens(tokens);
-        };
+      const tree = Interpreter.parser.execute();
 
-        Interpreter.parser.setSource = tokens;
+      if (state.dumpAST) {
+        this.debug.logAST(tree);
+      };
 
-        const tree = Interpreter.parser.generateAST();
-        
-        if (state.dumpAST) {
-          this.debug.logAST(tree);
-        };
-
-        Interpreter.walker.setSource = tree;
-        Interpreter.walker.execute();
-      });
+      Interpreter.walker.setSource = tree;
+      // Interpreter.walker.execute();
     }; 
   };
 };
