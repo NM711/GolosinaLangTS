@@ -1,5 +1,5 @@
 import GolosinaExceptions from "../../errors/exceptions";
-import { RuntimeValueID, RuntimeValues } from "./runtime_values";
+import { RuntimeValues } from "./runtime_values";
 
 export enum ScopeIdentifier {
   S_GLOBAL,
@@ -17,7 +17,7 @@ export enum EnvironmentErrorState {
 
 class Scope {
   public id: ScopeIdentifier;
-  public symbols: Map<string, RuntimeValues.Value>;
+  public symbols: Map<string, RuntimeValues.AbstractValue>;
   
   constructor(id: ScopeIdentifier) {
     this.id = id;
@@ -27,6 +27,7 @@ class Scope {
 
 class Environment {
   private scopes: Scope[];
+  public lastResolved: string;
   public current: Scope;
   public strict: boolean;
      
@@ -50,26 +51,25 @@ class Environment {
     this.updateCurrent();
   };
 
-  public declare(symbol: string, value: RuntimeValues.Value) {
+  public declare(symbol: string, value: RuntimeValues.AbstractValue) {
     if (this.current.symbols.has(symbol)) {
-      throw new GolosinaExceptions.Runtime.EnvironmentError(symbol, EnvironmentErrorState.ENV_ERR_DECL_EXISTS);
+      throw new GolosinaExceptions.Backend.EnvironmentError(symbol, EnvironmentErrorState.ENV_ERR_DECL_EXISTS);
     };
     
     this.current.symbols.set(symbol, value);
   };
 
-  public assign(symbol: string, value: RuntimeValues.Value) {
+  public assign(symbol: string, value: RuntimeValues.AbstractValue) {
     for (let i = this.scopes.length - 1; i >= 0; --i) {
       const scope = this.scopes[i];
-      
       if (scope.symbols.has(symbol)) {
-        const resolved = scope.symbols.get(symbol) as RuntimeValues.Value;
+        const resolved = scope.symbols.get(symbol) as RuntimeValues.AbstractValue;
       
-        if (resolved.id === RuntimeValueID.RID_VAR) { 
+        if (resolved.id === RuntimeValues.RuntimeValueID.RID_VAR) { 
           const variable = resolved as RuntimeValues.Variable;
       
           if (variable.isConst) {
-            throw new GolosinaExceptions.Runtime.EnvironmentError(symbol, EnvironmentErrorState.ENV_ERR_CONST_RE_ASSIGNMENT);
+            throw new GolosinaExceptions.Backend.EnvironmentError(symbol, EnvironmentErrorState.ENV_ERR_CONST_RE_ASSIGNMENT);
           };
         };
 
@@ -78,20 +78,21 @@ class Environment {
       };
     };
 
-    throw new GolosinaExceptions.Runtime.EnvironmentError(symbol, EnvironmentErrorState.ENV_ERR_UNRESOLVED);
+    throw new GolosinaExceptions.Backend.EnvironmentError(symbol, EnvironmentErrorState.ENV_ERR_UNRESOLVED);
   };
 
-  public resolve(symbol: string): RuntimeValues.Value {
+  public resolve(symbol: string): RuntimeValues.AbstractValue {
 
     for (let i = this.scopes.length - 1; i >= 0; --i) {
       const scope = this.scopes[i];
       
       if (scope.symbols.has(symbol)) {
-        return scope.symbols.get(symbol) as RuntimeValues.Value;
+        this.lastResolved = symbol;
+        return scope.symbols.get(symbol) as RuntimeValues.AbstractValue;
       };
     };
 
-    throw new GolosinaExceptions.Runtime.EnvironmentError(symbol, EnvironmentErrorState.ENV_ERR_UNRESOLVED);
+    throw new GolosinaExceptions.Backend.EnvironmentError(symbol, EnvironmentErrorState.ENV_ERR_UNRESOLVED);
   };
 };
 

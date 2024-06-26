@@ -1,4 +1,4 @@
-import ASTVisitor from "./ast_visitor";
+import ASTVisitor from "./evaluator";
 import type { SyntaxTree } from "../../frontend/parser/ast";
 
 /*
@@ -19,10 +19,14 @@ class Walker {
   };
 
   public execute() {
+    try {
+      for (const node of this.source) {
+        const returned = node.acceptEvalVisitor(this.visitor);
+        console.log(returned)
+      };
 
-
-    for (const node of this.source) {
-      node.accept(this.visitor);
+    } catch (e) {
+      console.error(e)
     };
   };
 };

@@ -1,6 +1,27 @@
 import { DataType } from "../../common";
-import { TokenInformation } from "../lexer/token"
-import TreeVisitor from "../../types/visitor.types"
+import { TokenInformation, LineOffset } from "../lexer/token"
+import VisitorTypes from "../../types/visitor.types";
+import { RuntimeValues } from "../../runtime/core/runtime_values";
+
+export class StatementOffsetTracker {
+  private offset: LineOffset;
+
+  constructor() {
+    this.offset = new LineOffset();
+  };
+
+  public setOffset(offset: number, type: "START" | "END") {
+    if (type === "START") {
+      this.offset.start = offset;
+    } else {
+      this.offset.end = offset;
+    };
+  };
+
+  public get getOffset() {
+    return this.offset;
+  };
+};
 
 export enum NodeIdentifiers {
   N_BINARY_EXPR,
@@ -32,21 +53,19 @@ export enum NodeIdentifiers {
 };
 
 export namespace SyntaxTree {
-  
+
   export abstract class BaseNodeAST {
     public id: NodeIdentifiers;
     public kind: string;
     public info: TokenInformation;
-    
+
     constructor(id: NodeIdentifiers, kind: string, info: TokenInformation) {
       this.id = id;
       this.kind = kind;
       this.info = info;
     };
 
-    // declare an interface
-
-    public abstract accept(visitor: TreeVisitor): void;
+    public abstract acceptEvalVisitor(visitor: VisitorTypes.TEvaluatorVisitor): RuntimeValues.AbstractValue;
   };
 
   export class BinaryExpressionNode extends BaseNodeAST {
@@ -58,8 +77,8 @@ export namespace SyntaxTree {
       super(NodeIdentifiers.N_BINARY_EXPR, kind, info);
     };
 
-    public accept(visitor: TreeVisitor): void {
-      visitor.visitBinaryExpr(this);
+    public override acceptEvalVisitor(visitor: VisitorTypes.TEvaluatorVisitor): RuntimeValues.AbstractValue {
+      return visitor.visitBinaryExpr(this);
     };
   };
 
@@ -72,13 +91,12 @@ export namespace SyntaxTree {
       super(NodeIdentifiers.N_UNARY_EXPR, "UnaryExpression", info);
       this.isPrefix = false;
     };
-        
-    public accept(visitor: TreeVisitor): void {
-      visitor.visitUnaryExpr(this);
-    };
 
+    public override acceptEvalVisitor(visitor: VisitorTypes.TEvaluatorVisitor): RuntimeValues.AbstractValue {
+      return visitor.visitUnaryExpr(this);
+    };
   };
-  
+
   export class AssignmentExpressionNode extends BaseNodeAST {
     public lhs: IdentfierNode | MemberExpressionNode;
     public op: string;
@@ -88,9 +106,10 @@ export namespace SyntaxTree {
       super(NodeIdentifiers.N_BINARY_ASSIGN_EXPR, "AssignmentExpression", info);
     };
 
-    public accept(visitor: TreeVisitor): void {
-      visitor.visitAssignmentExpr(this);
+    public override acceptEvalVisitor(visitor: VisitorTypes.TEvaluatorVisitor): RuntimeValues.AbstractValue {
+      return visitor.visitAssignmentExpr(this);
     };
+
   };
 
 
@@ -104,9 +123,10 @@ export namespace SyntaxTree {
       this.type = type;
     };
 
-    public accept(visitor: TreeVisitor): void {
-      visitor.visitLiteral(this);
+    public override acceptEvalVisitor(visitor: VisitorTypes.TEvaluatorVisitor): RuntimeValues.AbstractValue {
+      return visitor.visitLiteralExpr(this);
     };
+
   };
 
   export class IdentfierNode extends BaseNodeAST {
@@ -116,9 +136,9 @@ export namespace SyntaxTree {
       super(NodeIdentifiers.N_IDENT, "Identifier", info);
       this.name = name;
     };
-    
-    public accept(visitor: TreeVisitor): void {
-      visitor.visitIdent(this);
+
+    public override acceptEvalVisitor(visitor: VisitorTypes.TEvaluatorVisitor): RuntimeValues.AbstractValue {
+      return visitor.visitIdentExpr(this);
     };
   };
 
@@ -133,9 +153,8 @@ export namespace SyntaxTree {
       this.init = null;
     };
 
-    
-    public accept(visitor: TreeVisitor): void {
-      visitor.visitVar(this);
+    public override acceptEvalVisitor(visitor: VisitorTypes.TEvaluatorVisitor): RuntimeValues.AbstractValue {
+      return visitor.visitVarDecStmnt(this);
     };
   };
 
@@ -147,8 +166,8 @@ export namespace SyntaxTree {
       this.body = [];
     };
 
-    public accept(visitor: TreeVisitor): void {
-      visitor.visitBlockStmnt(this);    
+    public override acceptEvalVisitor(visitor: VisitorTypes.TEvaluatorVisitor): RuntimeValues.AbstractValue {
+      return visitor.visitBlockStmnt(this);
     };
   };
 
@@ -159,7 +178,9 @@ export namespace SyntaxTree {
       super(NodeIdentifiers.N_EXPORT_STMNT, "ExportStatement", info);
     };
 
-    public accept(visitor: TreeVisitor): void {};
+    public override acceptEvalVisitor(visitor: VisitorTypes.TEvaluatorVisitor): RuntimeValues.AbstractValue {
+      return visitor.visitExportStmnt(this);
+    };
   };
 
   export class ImportStatementNode extends BaseNodeAST {
@@ -169,8 +190,8 @@ export namespace SyntaxTree {
       super(NodeIdentifiers.N_IMPORT_STMNT, "ImportStatement", info);
     };
 
-    public accept(visitor: TreeVisitor): void {
-      visitor.visitImportStmnt(this);  
+    public override acceptEvalVisitor(visitor: VisitorTypes.TEvaluatorVisitor): RuntimeValues.AbstractValue {
+      return visitor.visitImportStmnt(this);
     };
   };
 
@@ -183,8 +204,8 @@ export namespace SyntaxTree {
       super(NodeIdentifiers.N_IF_STMNT, "IfStmnt", info);
     };
 
-    public accept(visitor: TreeVisitor): void {
-      visitor.visitIfStmnt(this);    
+    public override acceptEvalVisitor(visitor: VisitorTypes.TEvaluatorVisitor): RuntimeValues.AbstractValue {
+      return visitor.visitIfStmnt(this);
     };
   };
 
@@ -197,8 +218,8 @@ export namespace SyntaxTree {
       this.params = [];
     };
 
-    public accept(visitor: TreeVisitor): void {
-      visitor.visitMethodExpr(this); 
+    public override acceptEvalVisitor(visitor: VisitorTypes.TEvaluatorVisitor): RuntimeValues.AbstractValue {
+      return visitor.visitMethodExpr(this);
     };
   };
 
@@ -210,8 +231,8 @@ export namespace SyntaxTree {
       super(NodeIdentifiers.N_MODULE_STMNT, "ModuleStatement", info);
     };
 
-    public accept(visitor: TreeVisitor): void {
-        visitor.visitModuleStmnt(this);
+    public override acceptEvalVisitor(visitor: VisitorTypes.TEvaluatorVisitor): RuntimeValues.AbstractValue {
+      return visitor.visitModuleStmnt(this);
     };
   };
 
@@ -223,22 +244,22 @@ export namespace SyntaxTree {
       super(NodeIdentifiers.N_MEMBER_EXPR, "MemberExpression", info);
     };
 
-    
-    public accept(visitor: TreeVisitor): void {
-      visitor.visitMemberExpr(this); 
+    public override acceptEvalVisitor(visitor: VisitorTypes.TEvaluatorVisitor): RuntimeValues.AbstractValue {
+      return visitor.visitMemberExpr(this);
     };
   };
 
   export class ExpressionCallNode extends BaseNodeAST {
     public arguments: BaseNodeAST[];
     public callee: IdentfierNode | MemberExpressionNode;
+
     constructor(info: TokenInformation) {
       super(NodeIdentifiers.N_EXPR_CALL, "ExpressionCall", info);
       this.arguments = [];
     };
 
-    public accept(visitor: TreeVisitor): void {
-       visitor.visitCallExpr(this); 
+    public override acceptEvalVisitor(visitor: VisitorTypes.TEvaluatorVisitor): RuntimeValues.AbstractValue {
+      return visitor.visitCallExpr(this);
     };
   };
 
@@ -247,9 +268,7 @@ export namespace SyntaxTree {
       super(NodeIdentifiers.N_BREAK_STMNT, "BreakStatement", info);
     };
 
-    public accept(visitor: TreeVisitor): void {
-      visitor.visitBreakStmnt();
-    };
+    public override acceptEvalVisitor(visitor: VisitorTypes.TEvaluatorVisitor): RuntimeValues.AbstractValue { };
   };
 
   export class ContinueStatementNode extends BaseNodeAST {
@@ -257,20 +276,18 @@ export namespace SyntaxTree {
       super(NodeIdentifiers.N_CONTINUE_STMNT, "ContinueStatement", info);
     };
 
-    public accept(visitor: TreeVisitor): void {
-      visitor.visitContinueStmnt();
-    };
+    public override acceptEvalVisitor(visitor: VisitorTypes.TEvaluatorVisitor): RuntimeValues.AbstractValue { };
   };
 
   export class ReturnStatementNode extends BaseNodeAST {
     public expr: BaseNodeAST;
-    
+
     constructor(info: TokenInformation) {
       super(NodeIdentifiers.N_RETURN_STMNT, "ReturnStatement", info);
     };
 
-    public accept(visitor: TreeVisitor): void {
-      visitor.visitReturnStmnt(this);
+    public override acceptEvalVisitor(visitor: VisitorTypes.TEvaluatorVisitor): RuntimeValues.AbstractValue {
+      return visitor.visitReturnStmnt(this);
     };
   };
 
@@ -282,9 +299,9 @@ export namespace SyntaxTree {
       super(NodeIdentifiers.N_DIRECT_MEMBER, "DirectMember", info);
     };
 
-    public accept(): void {};
+    public override acceptEvalVisitor(visitor: VisitorTypes.TEvaluatorVisitor): RuntimeValues.AbstractValue { };
   };
-  
+
   export class CloneExpressionNode extends BaseNodeAST {
     public cloning: IdentfierNode | MemberExpressionNode;
     public members: DirectMemberNode[];
@@ -294,8 +311,8 @@ export namespace SyntaxTree {
       this.members = [];
     };
 
-    public accept(visitor: TreeVisitor): void {
-      visitor.visitCloneExpr(this); 
+    public override acceptEvalVisitor(visitor: VisitorTypes.TEvaluatorVisitor): RuntimeValues.AbstractValue {
+      return visitor.visitCloneExpr(this);
     };
   };
 
@@ -309,8 +326,8 @@ export namespace SyntaxTree {
       super(NodeIdentifiers.N_FOR_STMNT, "ForStatement", info);
     };
 
-    public accept(visitor: TreeVisitor): void {
-      visitor.visitForStmnt(this);
+    public override acceptEvalVisitor(visitor: VisitorTypes.TEvaluatorVisitor): RuntimeValues.AbstractValue {
+      return visitor.visitForStmnt(this);
     };
   };
 
@@ -321,9 +338,9 @@ export namespace SyntaxTree {
     constructor(info: TokenInformation) {
       super(NodeIdentifiers.N_WHILE_STMNT, "WhileStatement", info);
     };
-    
-    public accept(visitor: TreeVisitor): void {
-      visitor.visitWhileStmnt(this);
+
+    public override acceptEvalVisitor(visitor: VisitorTypes.TEvaluatorVisitor): RuntimeValues.AbstractValue {
+      return visitor.visitWhileStmnt(this);
     };
   };
 
@@ -331,14 +348,14 @@ export namespace SyntaxTree {
     public isDefault: boolean;
     public condition: BaseNodeAST | null;
     public block: BaseNodeAST;
-  
+
     constructor(info: TokenInformation) {
       super(NodeIdentifiers.N_CASE_TEST, "CaseTest", info);
       this.isDefault = false;
       this.condition = null;
     };
 
-    public accept(visitor: TreeVisitor): void {};
+    public override acceptEvalVisitor(visitor: VisitorTypes.TEvaluatorVisitor): RuntimeValues.AbstractValue { };
   };
 
   export class CaseStatementNode extends BaseNodeAST {
@@ -349,9 +366,9 @@ export namespace SyntaxTree {
       super(NodeIdentifiers.N_CASE_STMNT, "CaseStatement", info);
       this.tests = [];
     };
-
-    public accept(visitor: TreeVisitor): void {
-      visitor.visitCaseStmnt(this);   
+    
+    public override acceptEvalVisitor(visitor: VisitorTypes.TEvaluatorVisitor): RuntimeValues.AbstractValue {
+      return visitor.visitCaseStmnt(this);
     };
   };
 

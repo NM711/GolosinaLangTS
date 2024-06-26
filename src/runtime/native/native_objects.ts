@@ -17,7 +17,7 @@ namespace NativeModules {
       if (toLog) {
         const members: { [key: string]: string }[] = [];
 
-        for (const [key, value] of toLog.members) {
+        for (const [key, value] of toLog.getMembers) {
           members.push({
             [key]: value.constructor.name
           });
@@ -57,7 +57,7 @@ namespace NativeModules {
     };
     
     private addLog(): void {
-      this.object.members.set("log", new RuntimeValues.MethodNative((...log: RuntimeValues.Object[]) => {
+      this.object.setMember("log", new RuntimeValues.MethodNative((...log: RuntimeValues.Object[]) => {
         for (const toLog of log) {
           this.writeObject(toLog);
         };
@@ -72,7 +72,7 @@ namespace NativeModules {
     };
 
     private addPrint(): void {
-      this.object.members.set("print", new RuntimeValues.MethodNative((...log: RuntimeValues.Object[]) => {
+      this.object.setMember("print", new RuntimeValues.MethodNative((...log: RuntimeValues.Object[]) => {
         for (const toLog of log) {
           this.writeObject(toLog);
         };

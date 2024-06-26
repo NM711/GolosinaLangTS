@@ -2,35 +2,25 @@ import { DataType } from "../../common";
 import GolosinaExceptions from "../../errors/exceptions";
 import type { SyntaxTree } from "../../frontend/parser/ast"
 
-export enum RuntimeValueID {
-  RID_OBJ,
-  RID_METHOD,
-  RID_METHOD_NATIVE,
-  RID_VAR,
-  RID_MODULE
-};
-
-export enum ObjectType {
-  CLONE_OBJ,
-  DEF_OBJ,
-  VALUE_OBJ,
-  NATIVE_OBJ
-};
-
-
-export enum ParamState {
-  ARRAY,
-  FIXED
-};
-
-
 export namespace RuntimeValues {
-
-  export abstract class Value {
-    public abstract id: RuntimeValueID; 
+  export enum RuntimeValueID {
+    RID_OBJ,
+    RID_METHOD,
+    RID_METHOD_NATIVE,
+    RID_VAR,
+    RID_MODULE
   };
 
-  export class Variable extends Value {
+  export enum ParamState {
+    ARRAY,
+    FIXED
+  };
+
+  export abstract class AbstractValue {
+    public abstract id: RuntimeValueID;
+  };
+
+  export class Variable extends AbstractValue {
     public id: RuntimeValueID.RID_VAR;
     public isConst: boolean;
     public value: Object;
@@ -41,20 +31,20 @@ export namespace RuntimeValues {
     };
   };
 
-  export class Method extends Value {
+  export class Method extends AbstractValue {
     public id: RuntimeValueID.RID_METHOD;
     public params: SyntaxTree.IdentfierNode[];
-    public block: SyntaxTree.BlockNode;
+    public block: SyntaxTree.BlockStatementNode;
 
-    constructor(block: SyntaxTree.BlockNode, params: SyntaxTree.IdentfierNode[]) {
+    constructor(block: SyntaxTree.BlockStatementNode, params: SyntaxTree.IdentfierNode[]) {
       super();
       this.id = RuntimeValueID.RID_METHOD;
       this.block = block;
       this.params = params;
-    };   
+    };
   };
 
-  export class MethodNative extends Value {
+  export class MethodNative extends AbstractValue {
     public id: RuntimeValueID.RID_METHOD_NATIVE;
     public paramState: ParamState;
     public exec: (...params: any[]) => any;
@@ -66,22 +56,22 @@ export namespace RuntimeValues {
       this.exec = exec;
     };
   };
-  
-  export class Module extends Value {
+
+  export class Module extends AbstractValue {
     public id: RuntimeValueID.RID_MODULE;
-    public block: SyntaxTree.BlockNode;
-  
+    public block: SyntaxTree.BlockStatementNode;
+
     constructor() {
       super();
       this.id = RuntimeValueID.RID_MODULE;
-    };   
+    };
   };
 
-  export class Object extends Value {
+  export class Object extends AbstractValue {
     public id: RuntimeValueID.RID_OBJ;
     public prototype: Object | null;
-    public members: Map<string, Value>;
-    
+    private members: Map<string, AbstractValue>;
+
     constructor(proto: null | Object = null) {
       super();
       this.id = RuntimeValueID.RID_OBJ;
@@ -89,50 +79,60 @@ export namespace RuntimeValues {
       this.members = new Map();
     };
 
-    public getMember(key: string): Value {
+    public getMember(key: string): AbstractValue {
       // Commenze prototype chain here
 
       let proto: Object | null = this;
 
       while (proto !== null) {
         if (proto.members.has(key)) {
-         return proto.members.get(key) as Value;
+          return proto.members.get(key) as AbstractValue;
         };
 
         proto = proto.prototype;
       };
 
-      throw new GolosinaExceptions.Runtime.RuntimeError(`Could not get member "${key}" because it is undefined!`);
+      throw new GolosinaExceptions.Backend.RuntimeError(`Could not get member "${key}" because it is undefined!`);
     };
 
-    public setMember(key: string, value: Value): void {
+    public get getMembers(): Iterable<[string, AbstractValue]> {
+      return this.members.entries();
+    };
+
+    public setMember(key: string, value: AbstractValue): void {
       let proto: Object | null = this;
 
       while (proto !== null) {
         if (proto.members.has(key)) {
-         proto.members.set(key, value);
-         return;
+          proto.members.set(key, value);
+          return;
         };
 
         proto = proto.prototype;
       };
 
-      throw new GolosinaExceptions.Runtime.RuntimeError(`Could not set member "${key}" because it is undefined!`);
+      throw new GolosinaExceptions.Backend.RuntimeError(`Could not set member "${key}" because it is undefined!`);
     };
   };
-      
+
 };
 
 export namespace RuntimeObjects {
-  export type TypeValue = boolean | string | number | any[] | null; 
+  export enum ObjectType {
+    CLONE_OBJ,
+    DEF_OBJ,
+    VALUE_OBJ,
+    NATIVE_OBJ
+  };
+
+  export type TypeValue = boolean | string | number | any[] | null;
 
   export class ValueObject extends RuntimeValues.Object {
     public typename: string;
     private dataType: DataType;
-    public value: TypeValue;
-       
+    public primitive: TypeValue;
     constructor(type: DataType, name: string) {
-      super();  
+      super();
       this.dataType = type;
       this.typename = name;
     };
@@ -141,7 +141,7 @@ export namespace RuntimeObjects {
       return this.dataType === DataType.T_STRING;
     };
 
-    public isBoolean(): this is BooleanObject  {
+    public isBoolean(): this is BooleanObject {
       return this.dataType === DataType.T_BOOLEAN;
     };
 
@@ -149,7 +149,7 @@ export namespace RuntimeObjects {
       return this.dataType === DataType.T_INTEGER || this.dataType === DataType.T_FLOAT;
     };
 
-    public isFloat(): this is FloatObject  {
+    public isFloat(): this is FloatObject {
       return (this.dataType === DataType.T_FLOAT);
     };
 
@@ -171,69 +171,70 @@ export namespace RuntimeObjects {
   */
 
   export class ContainerObject extends ValueObject {
-    public value: any[];
+    // i get it doesnt make much sense to name this a primtiive but eh.
+    public primitive: any[];
 
     constructor() {
       super(DataType.T_OBJECT, "Container");
-      this.value = [];
+      this.primitive  = [];
       this.addUtil();
     };
 
     private addUtil() {
-      this.members.set("length", new RuntimeValues.MethodNative(() => {
-        return this.value.length;
+      this.setMember("length", new RuntimeValues.MethodNative(() => {
+        return this.primitive.length;
       }))
     };
-    
+
   };
 
   export class NullObject extends ValueObject {
-    public value: null;
-    
+    public primitive: null;
+
     constructor() {
       super(DataType.T_NULL, "null");
-      this.value = null;
+      this.primitive = null;
     }
   };
 
   export class BooleanObject extends ValueObject {
-    public value: boolean;
-    
+    public primitive: boolean;
+
     constructor(value: boolean) {
       super(DataType.T_BOOLEAN, "boolean");
-      this.value = value;
+      this.primitive = value;
     };
   };
 
   export class StringObject extends ValueObject {
-    public value: string;
-    
+    public primitive: string;
+
     constructor(value: string) {
       super(DataType.T_STRING, "string");
-      this.value = value;
+      this.primitive = value;
       this.addUtils();
     };
 
     private addUtils() {
-      this.members.set("includes", new RuntimeValues.MethodNative((inc: RuntimeObjects.StringObject) => {
-        return this.value.includes(inc.value);
+      this.setMember("includes", new RuntimeValues.MethodNative((inc: RuntimeObjects.StringObject) => {
+        return this.primitive.includes(inc.primitive);
       }));
 
-      this.members.set("length", new RuntimeValues.MethodNative(() => {
-        return this.value.length;
+      this.setMember("length", new RuntimeValues.MethodNative(() => {
+        return this.primitive.length;
       }));
 
-      this.members.set("split", new RuntimeValues.MethodNative((at: RuntimeObjects.StringObject) => {
-        return this.value.split(at.value);
+      this.setMember("split", new RuntimeValues.MethodNative((at: RuntimeObjects.StringObject) => {
+        return this.primitive.split(at.primitive);
       }));
-     };
+    };
   };
 
   export class NumericObject extends ValueObject {
-    public value: number;
+    public primitive: number;
     constructor(value: number, type: DataType, name: string) {
       super(type, name);
-      this.value = value;
+      this.primitive = value;
     };
   };
 

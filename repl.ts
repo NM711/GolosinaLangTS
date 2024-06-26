@@ -1,4 +1,3 @@
-import GolosinaExceptions from "./src/errors/exceptions";
 import Interpreter from "./src/interpreter";
 import Readline from "node:readline";
 
@@ -21,15 +20,12 @@ class Repl {
         return
       };
 
-      try {
-        Interpreter.parser.setSource(input, false);
-        Interpreter.walker.setSource = Interpreter.parser.execute();
-        // Interpreter.walker.execute();
-        this.recall();
-
-      } catch (e) {
-        console.log(e)
-      }
+      Interpreter.parser.setSource(input, false);
+      const nodes = Interpreter.parser.execute();
+      Interpreter.parser.reset();
+      Interpreter.walker.setSource = nodes;
+      Interpreter.walker.execute();
+      this.recall();
     });
   };
 

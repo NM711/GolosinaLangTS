@@ -3,35 +3,36 @@ import SemanticValidator from "./semantic_validator";
 import ErrorReporter from "../../errors/reporter";
 import Lexer from "../lexer/lexer";
 import fs from "node:fs";
-import { SyntaxTree } from "./ast";
+import { StatementOffsetTracker, SyntaxTree } from "./ast";
 import { TokenIdentifiers } from "../../types/token.types";
 import { Token } from "../lexer/token";
 import { DataType } from "../../common";
+import ReporterMetaData from "../../errors/reporter_meta_data";
 
 
 class Helpers {
   public isArrow(token: Token) {
-    return token.id === TokenIdentifiers.ARROW;
+    return token.id === TokenIdentifiers.ARROW_SYMB;
   };
 
   public isLeftParen(token: Token) {
-    return token.id === TokenIdentifiers.LEFT_PARENTHESIS;
+    return token.id === TokenIdentifiers.LEFT_PARENTHESIS_SYMB;
   };
 
   public isRightParen(token: Token) {
-    return token.id === TokenIdentifiers.RIGHT_PARENTHESIS;
+    return token.id === TokenIdentifiers.RIGHT_PARENTHESIS_SYMB;
   };
 
   public isRightCurly(token: Token) {
-    return token.id === TokenIdentifiers.RIGHT_CURLY;
+    return token.id === TokenIdentifiers.RIGHT_CURLY_SYMB;
   };
 
   public isSemicolon(token: Token) {
-    return token.id === TokenIdentifiers.SEMICOLON;
+    return token.id === TokenIdentifiers.SEMICOLON_SYMB;
   };
 
   public isSeperator(token: Token) {
-    return token.id === TokenIdentifiers.SEPERATOR;
+    return token.id === TokenIdentifiers.COMMA_SYMB;
   };
 
   public isUnIncrement(token: Token) {
@@ -43,7 +44,7 @@ class Helpers {
   };
 
   public isUnNot(token: Token) {
-    return token.id === TokenIdentifiers.UNARY_NOT;
+    return token.id === TokenIdentifiers.EXCLMATION_SYMB;
   };
 
   public isPostfix(token: Token) {
@@ -51,23 +52,23 @@ class Helpers {
   };
 
   public isPrefix(token: Token) {
-    return this.isPostfix(token) || token.id === TokenIdentifiers.UNARY_NOT || token.id === TokenIdentifiers.BINARY_ADDITION || token.id === TokenIdentifiers.BINARY_SUBTRACTION;
+    return this.isPostfix(token) || token.id === TokenIdentifiers.EXCLMATION_SYMB || token.id === TokenIdentifiers.PLUS_SYMB || token.id === TokenIdentifiers.MINUS_SYMB;
   };
 
   public isMultiplicative(token: Token) {
-    return token.id === TokenIdentifiers.BINARY_MULTIPLICATION || token.id === TokenIdentifiers.BINARY_DIVISION || token.id === TokenIdentifiers.BINARY_MODULUS;
+    return token.id === TokenIdentifiers.STAR_SYMB || token.id === TokenIdentifiers.SLASH_SYMB || token.id === TokenIdentifiers.PERCENTAGE_SYMB;
   };
 
   public isAdditive(token: Token) {
-    return token.id === TokenIdentifiers.BINARY_ADDITION || token.id === TokenIdentifiers.BINARY_SUBTRACTION;
+    return token.id === TokenIdentifiers.PLUS_SYMB || token.id === TokenIdentifiers.MINUS_SYMB;
   };
 
   public isRelational(token: Token) {
-    return token.id === TokenIdentifiers.BINARY_GT || token.id === TokenIdentifiers.BINARY_GT_EQ || token.id === TokenIdentifiers.BINARY_LT || token.id === TokenIdentifiers.BINARY_LT_EQ;
+    return token.id === TokenIdentifiers.LEFT_ANGLE_BRACKET_SYMB || token.id === TokenIdentifiers.LEFT_ANGLE_BRACKET_EQ_SYMB || token.id === TokenIdentifiers.RIGHT_ANGLE_BRACKER_SYMB || token.id === TokenIdentifiers.RIGHT_ANGLE_BRACKET_EQ_SYMB;
   };
 
   public isEquality(token: Token) {
-    return token.id === TokenIdentifiers.BINARY_EQUALITY || token.id === TokenIdentifiers.BINARY_NOT_EQUALITY;
+    return token.id === TokenIdentifiers.BINARY_EQUALITY || token.id === TokenIdentifiers.BINARY_INEQUALITY;
   };
 
   public isLogicalOr(token: Token) {
@@ -87,42 +88,6 @@ class Helpers {
   };
 };
 
-class Tracking {
-  public startIndex: number;
-  public endIndex: number;
-  public startOffset: number;
-  public endOffset: number;
-  
-  public updateStart(index: number, offset: number) {
-    this.startIndex = index;
-    this.startOffset = offset;
-  };
-
-  public updateEnd(index: number, offset: number) {
-    this.endIndex = index;
-    this.endOffset = offset;
-  };
-
-  constructor() {
-    this.startIndex = 0;
-    this.endIndex = 0;
-    this.startOffset = 0;
-    this.endOffset = 0;
-  };
-};
-
-class ParserFileData {
-  // current file the parser is parsing
-  public file: string;
-  // paths that have been imported and what not
-  public recordedPaths: Set<string>;
-
-  constructor() {
-    this.recordedPaths = new Set([]);
-    this.file = "<repl>";
-  };
-};
-
 class Parser {
   private program: SyntaxTree.Program;
   private lexer: Lexer;
@@ -130,47 +95,36 @@ class Parser {
   private validator: SemanticValidator;
   private tokens: Token[];
   private index: number;
-  private track: Tracking;
-  private fileData: ParserFileData;
+  private track: StatementOffsetTracker;
 
   constructor() {
     this.lexer = new Lexer();
     this.helpers = new Helpers();
     this.validator = new SemanticValidator();
-    this.track = new Tracking();
-    this.fileData = new ParserFileData();
+    this.track = new StatementOffsetTracker();
     this.program = [];
     this.index = 0;
   };
 
   public setSource(inputOrPath: string, isPath: boolean) {
     if (isPath) {
-      this.fileData.file = inputOrPath;
-      this.lexer.setSource = fs.readFileSync(inputOrPath, "utf-8");
-      
-      if (!this.fileData.recordedPaths.has(inputOrPath)) {
-        this.fileData.recordedPaths.add(inputOrPath);
-      };
-
+      ReporterMetaData.FilePath = inputOrPath;
+      ReporterMetaData.Input = fs.readFileSync(ReporterMetaData.FilePath, "utf8");
     } else {
-      this.lexer.setSource = inputOrPath;
+      ReporterMetaData.Input = inputOrPath;
     };
 
     this.tokens = this.lexer.execute();
-
-    // update validator data.
-    
-    this.validator.setFile = this.fileData.file;
-    this.validator.setInput = this.lexer.input;
   };
 
   public get getTokens() {
     return this.tokens;
   };
 
-  private reset(): void {
+  public reset(): void {
     this.tokens = [];
     this.program = [];
+    this.lexer.reset();
     this.index = 0;
   };
 
@@ -183,7 +137,7 @@ class Parser {
   };
 
   private eat(): void {
-    if (this.index < this.tokens.length) {
+    if (this.look.id !== TokenIdentifiers.EOF_T) {
       ++this.index;
     };
   };
@@ -233,8 +187,10 @@ class Parser {
       return this.parseCloneExpr();
     } else if (this.look.id === TokenIdentifiers.METHOD) {
       return this.parseMethodExpr();
+    } else if (this.look.id === TokenIdentifiers.IDENT) {
+      return new SyntaxTree.IdentfierNode(this.look.lexeme, this.look.info);
     } else {
-      throw new GolosinaExceptions.Frontend.SyntaxError(`Unexpected member primary expression start at "${this.look.lexeme}"!`, this.look.info, this.fileData.file, this.lexer.input);
+      throw new GolosinaExceptions.Frontend.SyntaxError(`Unexpected in member primary expression!`, this.look.info, ReporterMetaData.FilePath);
     };
   };
 
@@ -245,8 +201,10 @@ class Parser {
       return literal;
     } else if (this.look.id === TokenIdentifiers.CLONE) {
       return this.parseCloneExpr();
+    } else if (this.look.id === TokenIdentifiers.IDENT) {
+      return new SyntaxTree.IdentfierNode(this.look.lexeme, this.look.info);
     } else {
-      throw new GolosinaExceptions.Frontend.SyntaxError(`Unexpected primary expression start at "${this.look.lexeme}"!`, this.look.info, this.fileData.file, this.lexer.input);
+      throw new GolosinaExceptions.Frontend.SyntaxError(`Unexpected primary expression!`, this.look.info, ReporterMetaData.FilePath);
     };
   };
 
@@ -263,7 +221,7 @@ class Parser {
       const member = new SyntaxTree.DirectMemberNode(this.look.info);
       member.key = this.validator.expect.ident(this.parsePrimary(), "member key identifier!");
 
-      this.validator.expect.token(TokenIdentifiers.BINARY_ASSIGNMENT, "=", this.look);
+      this.validator.expect.token(TokenIdentifiers.EQUAL_SYMB, "=", this.look);
       this.eat();
 
       member.value = this.parseMemberPrimary();
@@ -294,17 +252,17 @@ class Parser {
       const param = this.validator.expect.ident(this.parsePrimary());
       expr.params.push(param);
 
-      if (!this.helpers.isRightParen(this.look)) {
-        this.validator.expect.seperator(this.look);
-        this.eat();
+      if (this.helpers.isRightParen(this.look)) {
+        break;
       };
+      this.validator.expect.seperator(this.look);
+      this.eat();
     };
-
+    
     this.validator.expect.rightParenthesis(this.look);
     this.eat();
 
     expr.block = this.parseBlockStmnt();
-
     return expr;
   };
 
@@ -366,7 +324,7 @@ class Parser {
     this.eat();
     expr.argument = lhs;
     lhs = expr;
-
+    this.validator.validateUnaryExpr(expr);
     return lhs;
   };
 
@@ -396,8 +354,9 @@ class Parser {
       expr.isPrefix = true;
       expr.op = this.look.lexeme;
       this.eat();
-
       expr.argument = this.parseCallAndAccessExpr();
+
+      this.validator.validateUnaryExpr(expr);
       return expr;
     };
 
@@ -513,13 +472,12 @@ class Parser {
   private parseAssignmentExpr(): SyntaxTree.BaseNodeAST {
     let lhs = this.parseLogicalExpr();
 
-    if (this.look.id === TokenIdentifiers.BINARY_ASSIGNMENT) {
+    if (this.look.id === TokenIdentifiers.EQUAL_SYMB) {
       const expr = new SyntaxTree.AssignmentExpressionNode(lhs.info);
       expr.op = this.look.lexeme;
       this.eat();
-
+      expr.lhs = this.validator.validateAssignmentLHS(lhs);
       expr.rhs = this.parseExpr();
-
       lhs = expr;
     };
 
@@ -550,10 +508,9 @@ class Parser {
       this.validator.expect.semicolon(this.look);
       this.eat();
     };
-
+    
     this.validator.expect.rightCurly(this.look);
     this.eat();
-
     return stmnt;
   };
 
@@ -641,7 +598,7 @@ class Parser {
     };
 
     if (this.look.id === TokenIdentifiers.DEFAULT && defaultsCounted > 1) {
-      throw new GolosinaExceptions.Frontend.SyntaxError(`Encountered more than one case "default"!`, stmnt.info, this.fileData.file, this.lexer.input);
+      throw new GolosinaExceptions.Frontend.SyntaxError(`Encountered more than one case "default"!`, stmnt.info, ReporterMetaData.FilePath);
     };
 
     this.validator.expect.rightCurly(this.look);
@@ -662,6 +619,8 @@ class Parser {
     this.validator.expect.rightParenthesis(this.look);
     this.eat();
 
+    stmnt.block = this.parseBlockStmnt();
+    
     if (this.helpers.isElse(this.look)) {
       this.eat();
       stmnt.alternate = (this.helpers.isIf(this.look)) ? this.parseIfStmnt() : this.parseBlockStmnt();
@@ -681,9 +640,9 @@ class Parser {
     this.eat();
 
     stmnt.ident = this.validator.expect.ident(this.parsePrimary(), "variable/constant identifier");
-    
+
     if (!this.helpers.isSemicolon(this.look)) {
-      this.validator.expect.token(TokenIdentifiers.BINARY_ASSIGNMENT, "=", this.look);
+      this.validator.expect.token(TokenIdentifiers.EQUAL_SYMB, "=", this.look);
       this.eat();
       stmnt.init = this.validator.validateVarInit(this.parseExpr());
     };
@@ -714,14 +673,16 @@ class Parser {
   };
 
 
-  private parseStmntTop(): SyntaxTree.BaseNodeAST | undefined {
-    if (this.fileData.recordedPaths.size !== 0) {
+  private parseStmntTop(): SyntaxTree.BaseNodeAST {
+    if (this.index === 0 && ReporterMetaData.FilePath !== "<repl>") {
       this.validator.expect.module(this.look);
       const stmnt = new SyntaxTree.ModuleStatemenetNode(this.look.info);
       this.eat();
       stmnt.ident = this.validator.expect.ident(this.parsePrimary(), "module identifier");
       return stmnt;
-    };
+    } else {
+      return this.parseStmntMid();
+    }
   };
 
   private parseStmntMid(): SyntaxTree.BaseNodeAST {
@@ -736,7 +697,6 @@ class Parser {
   };
 
   private parseStmntLow(): SyntaxTree.BaseNodeAST {
-    this.track.updateStart(this.index, this.look.info.offset.start);
     switch (this.look.id) {
       case TokenIdentifiers.LET:
       case TokenIdentifiers.CONST:
@@ -755,7 +715,7 @@ class Parser {
         return this.parseContinueStmnt();
       case TokenIdentifiers.RETURN:
         return this.parseReturnStmnt();
-      case TokenIdentifiers.LEFT_CURLY:
+      case TokenIdentifiers.LEFT_CURLY_SYMB:
         return this.parseBlockStmnt();
       default:
         return this.parseExpr();
@@ -763,7 +723,7 @@ class Parser {
   };
 
   private parse(): SyntaxTree.BaseNodeAST {
-    return this.parseStmntMid();
+    return this.parseStmntTop();
   };
 
   /*
@@ -771,68 +731,61 @@ class Parser {
   */
 
   private synchronize() {
-    while (this.index < this.tokens.length) {
+    while (true) {
       switch (this.look.id) {
         case TokenIdentifiers.LET:
         case TokenIdentifiers.CONST:
         case TokenIdentifiers.IF:
         case TokenIdentifiers.CASE:
+        case TokenIdentifiers.CLONE:
+        case TokenIdentifiers.METHOD:
         case TokenIdentifiers.FOR:
         case TokenIdentifiers.WHILE:
         case TokenIdentifiers.BREAK:
         case TokenIdentifiers.CONTINUE:
         case TokenIdentifiers.RETURN:
-        case TokenIdentifiers.LEFT_CURLY:
+        case TokenIdentifiers.LEFT_CURLY_SYMB:
         case TokenIdentifiers.IMPORT:
         case TokenIdentifiers.EXPORT:
         case TokenIdentifiers.MODULE:
-        case TokenIdentifiers.SEMICOLON:
+        case TokenIdentifiers.EOF_T:
           return;
-      };
 
-      this.eat();
+        default:
+          this.eat();
+      };
     };
   };
 
   public execute(): SyntaxTree.Program {
-    while (this.index < this.tokens.length) {
+    while (this.look.id !== TokenIdentifiers.EOF_T) {
       try {
-        if (this.index === 0) {
-          const topStmnt = this.parseStmntTop();
-
-          if (topStmnt) {
-            this.program.push(topStmnt);
-          };
-
-        } else {
-          this.program.push(this.parse());
-        };
-
+        this.track.setOffset(this.look.info.offset.start, "START");
+        this.program.push(this.parse());
         this.validator.expect.semicolon(this.look);
         this.eat();
 
       } catch (e) {
+        // eat up then synchronize
+        this.eat();
         this.synchronize();
-        this.track.updateEnd(this.index, this.look.info.offset.end);
+        this.track.setOffset(this.look.info.offset.end, "END");
 
         if (e instanceof GolosinaExceptions.Frontend.SyntaxError) {
-          e.startOffset = this.track.startOffset;
-          e.endOffset = this.track.endOffset;
-          e.startIndex = this.track.startIndex;
-          e.endIndex = this.track.endIndex;
-          this.eat();
+          // console.log(e.message)
+          // // console.error(e)
+          // // e.offsets = this.track.getOffset;
+          // // console.log(e.offsets)
         };
 
         // push errors to unwind later.
-        ErrorReporter.syntaxErrors.push(e);
+        ErrorReporter.PushParserError(e);
       };
     };
 
-    ErrorReporter.syntax();
+    ErrorReporter.UnwindParserErrors();
 
-    const program = this.program;
-    this.reset();
-    return program;
+    return this.program;
   };
 };
 

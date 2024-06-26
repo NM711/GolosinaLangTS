@@ -1,3 +1,5 @@
+module main;
+
 const UserFactory = clone Object {
 	create = method (userAge, userName) {
 		return clone Object {

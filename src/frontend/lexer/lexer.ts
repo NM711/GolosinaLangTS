@@ -1,19 +1,21 @@
-import { TokenIdentifiers } from "../../types/token.types";
+import ReporterMetaData from "../../errors/reporter_meta_data";
+import GolosinaExceptions from "../../errors/exceptions";
+import { InfoUpdateType, LexerState, TokenIdentifiers } from "../../types/token.types";
 import { LinePosition, TokenInformation, Token } from "./token";
+import ErrorReporter from "../../errors/reporter";
 
 class Lexer {
   private table: Map<string, TokenIdentifiers>;
   private tokens: Token[];
   private index: number;
-  public input: string[];
+  private matching: string;
   private info: TokenInformation;
   private position: LinePosition;
-      
+  private state: LexerState;
+  private message: string;
+
   constructor() {
-    this.tokens = [];
-    this.index = 0;
-    this.position = new LinePosition();
-    this.info = new TokenInformation();
+    this.reset();
     this.table = new Map();
     this.table.set("if", TokenIdentifiers.IF);
     this.table.set("else", TokenIdentifiers.ELSE);
@@ -37,234 +39,504 @@ class Lexer {
     this.table.set("false", TokenIdentifiers.BOOLEAN_LITERAL);
   };
 
-  private peek(i: number = 0): string {
-    return this.input[this.index + i];
+  private updatePosition() {
+    ++this.position.char;
+    if (this.look === "\n") {
+      this.position.char = 1;
+      ++this.position.line;
+    };
   };
 
-  private eat(): void {
+  private get look() {
+    return ReporterMetaData.Input[this.index];
+  };
+
+  private eat() {
     this.updatePosition();
     ++this.index;
   };
 
-  private get isDigit(): boolean {
-    return /[0-9\.]/.test(this.peek());
-  };
+  /**
+    Appends look() to matching, and eats.
+  */
 
-  private get isAlpha(): boolean {
-    return /[a-zA-z]/.test(this.peek());
-  };
-
-  private get isSpecial(): boolean {
-    return /[\+\-\*\/\%\&\|\.\!\#\[\]\(\)\{\}\:\;\,\<\>\=\"]/.test(this.peek());
-  };
-
-  private pushToken(lexeme: string, id: TokenIdentifiers, eatQnt: number = 0) {
-    for (let i = 0; i < eatQnt; ++i) {
-      this.eat();
-    };
-
-    this.updateInfo("end");
-
-    this.tokens.push(new Token(id, lexeme, this.info));
-  };
-
-  private updateInfo(type: "end" | "start") {
-    this.info.position[type].line = this.position.line;
-    this.info.position[type].char = this.position.char;
-    this.info.offset[type] = this.index;
-    this.info.offset[type] = this.index;
-  };
-
-  private updatePosition(): void {
-    ++this.position.char;
-    
-    if (this.peek() == "\n") {
-      this.position.char = 0;
-      ++this.position.line;  
-    };
-  };
-
-  // very primitive lookin lol
-
-  private handleDoubleCharSpecial(lexeme1: string, lexeme2: string, id1: TokenIdentifiers, id2: TokenIdentifiers) {
-    if (this.peek(1) === lexeme2) {
-      this.pushToken(lexeme1 + lexeme2, id2, 2);
-    } else {
-      this.pushToken(lexeme1, id1, 1);
-    };
-  };
-
-  private handleSpecial(): void {
-
-    switch (this.peek()) {
-      case "#":
-        this.handleComment();
-      break;
-
-      case "\"":
-        this.handleString();
-      break;
-
-      case "<":
-        this.handleDoubleCharSpecial("<", "=", TokenIdentifiers.BINARY_LT, TokenIdentifiers.BINARY_LT_EQ);
-      break;
-
-      case ">":
-        this.handleDoubleCharSpecial(">", "=", TokenIdentifiers.BINARY_GT, TokenIdentifiers.BINARY_GT_EQ);
-      break;
-
-      case "=":
-        this.handleDoubleCharSpecial("=", "=", TokenIdentifiers.BINARY_ASSIGNMENT, TokenIdentifiers.BINARY_EQUALITY);
-      break;
-
-      case "!":
-        this.handleDoubleCharSpecial("!", "=", TokenIdentifiers.UNARY_NOT, TokenIdentifiers.BINARY_NOT_EQUALITY);
-      break;
-
-      case "+":
-        this.handleDoubleCharSpecial("+", "+", TokenIdentifiers.BINARY_ADDITION, TokenIdentifiers.UNARY_INCREMENT);
-      break;
-        
-      case "-":
-        if (this.peek(1) === "-") {
-          this.pushToken("--", TokenIdentifiers.UNARY_DECREMENT, 2);
-        } else if (this.peek(1) === ">") {
-          this.pushToken("->", TokenIdentifiers.ARROW, 2);
-        } else {
-          this.pushToken("-", TokenIdentifiers.BINARY_SUBTRACTION, 1);
-        };
-      break;
-        
-      case "*":
-        this.pushToken("*", TokenIdentifiers.BINARY_MULTIPLICATION, 1);
-      break;
-        
-      case "/":
-        this.pushToken("/", TokenIdentifiers.BINARY_DIVISION, 1);
-      break;
-        
-      case "%":
-        this.pushToken("%", TokenIdentifiers.BINARY_MODULUS, 1);
-      break;
-
-      case ",":
-        this.pushToken(",", TokenIdentifiers.SEPERATOR, 1);
-      break;
-
-      case ";":
-        this.pushToken(";", TokenIdentifiers.SEMICOLON, 1);
-      break;
-
-      case "(":
-        this.pushToken("(", TokenIdentifiers.LEFT_PARENTHESIS, 1);
-      break;
-        
-      case ")":
-        this.pushToken(")", TokenIdentifiers.RIGHT_PARENTHESIS, 1);
-      break;
-        
-      case "{":
-        this.pushToken("{", TokenIdentifiers.LEFT_CURLY, 1);
-      break;
-
-      case "}":
-        this.pushToken("}", TokenIdentifiers.RIGHT_CURLY, 1);
-      break;
-              
-      case "&":
-        this.handleDoubleCharSpecial("&", "&", TokenIdentifiers.AMPERSAND, TokenIdentifiers.BINARY_AND);
-      break;
-
-      case "|":
-        this.handleDoubleCharSpecial("|", "|", TokenIdentifiers.PIPE, TokenIdentifiers.BINARY_OR);
-      break;
-
-      case ":":
-        this.pushToken(":", TokenIdentifiers.COLON, 1);
-      break;
-      
-      default:
-       this.eat();
-    };
-  
-  };
-
-  private handleString(): void {
-    let str: string = "";
+  private consume() {
+    this.matching += this.look;
     this.eat();
-    
-    while (this.input.length > 0) {
-      if (this.peek() == "\"") {
+  };
+
+  private updateTokenInfoData(type: InfoUpdateType) {
+    if (type === InfoUpdateType.START) {
+      this.info.position.start.char = this.position.char;
+      this.info.position.start.line = this.position.line;
+      this.info.offset.start = this.index;
+    } else {
+      this.info.position.end.char = this.position.char;
+      this.info.position.end.line = this.position.line;
+      this.info.offset.end = this.index;
+    };
+  };
+
+  private pushToken(id: TokenIdentifiers) {
+    this.updateTokenInfoData(InfoUpdateType.END);
+    this.tokens.push(new Token(id, this.matching, this.info));
+    this.matching = "";
+    this.state = LexerState.S_INITIAL;
+  };
+
+  private checkInput() {
+    if (ReporterMetaData.Input.length === 0) {
+      console.error("No source provided!");
+      process.exit(1);
+    };
+  };
+
+  /**
+    Updates top level state.
+  */
+
+  private updateState(): LexerState {
+    let charState: LexerState = LexerState.S_INITIAL;
+
+    switch (this.look) {
+      case '\n':
+      case ' ':
+      case '\t':
+      // nodejs handles out of bound not with "\0" NULL character but with "undefined"
+      case undefined:
         this.eat();
+        charState = LexerState.S_INITIAL;
         break;
-      };
-      
-      str += this.peek()
-      this.eat();
-    };
 
-    this.pushToken(str, TokenIdentifiers.STRING_LITERAL);
-  };
-
-  private handleComment(): void {
-    // \n breaks out of the comment
-    while (this.input.length > 0) {
-      this.eat();
-
-      if (this.peek() == "\n") {
+      case '#':
         this.eat();
+        charState = LexerState.S_COMMENT;
         break;
-      };
-    };
-  };
 
-  private handleKW(): void {
-    let key: string = "";
-
-    while ((this.isAlpha || this.isDigit) && this.input.length > 0) {
-      key += this.peek();
-      this.eat();
-    };   
-
-    if (this.table.has(key)) {
-      const id = this.table.get(key) as TokenIdentifiers;
-      this.pushToken(key, id);
-    } else if (/^[a-zA-Z]+[a-zA-Z0-9]*$/.test(key)) {
-      this.pushToken(key, TokenIdentifiers.IDENT);
-    } else if (/^[0-9]+$/.test(key)) {
-      this.pushToken(key, TokenIdentifiers.INTEGER_LITERAL);
-    } else if (/^[0-9]+\.[0-9]+$/.test(key)) {
-      this.pushToken(key, TokenIdentifiers.FLOAT_LITERAL);
-    };
-  };
-
-  public set setSource(source: string) {
-    this.input = source.split("");
-  };
-
-  public execute(): Token[] {
-
-    while (this.index < this.input.length) {
-
-      if (this.peek() === " " || this.peek() === "\t" || this.peek() === "\n") {
+      case '"':
         this.eat();
-        continue;
-      };
-      
-      if (this.isDigit || this.isAlpha) {
-        this.updateInfo("start");
-        this.handleKW();
-      } else if (this.isSpecial) {
-        this.updateInfo("start");
-        this.handleSpecial();        
-      };
+        charState = LexerState.S_STRING;
+        break;
+
+      case '!':
+        this.consume();
+        charState = LexerState.S_EXCLAMATION;
+        break;
+
+      case '=':
+        this.consume();
+        charState = LexerState.S_EQUAL;
+        break;
+
+      case '+':
+        this.consume();
+        charState = LexerState.S_PLUS;
+        break;
+
+      case '-':
+        this.consume();
+        charState = LexerState.S_MINUS;
+        break;
+
+      case '*':
+        this.consume();
+        charState = LexerState.S_STAR;
+        break;
+
+      case '/':
+        this.consume();
+        charState = LexerState.S_SLASH;
+        break;
+
+      case '%':
+        this.consume();
+        charState = LexerState.S_PERCENT;
+        break;
+
+      case '<':
+        this.consume();
+        charState = LexerState.S_LEFT_ANGLE;
+        break;
+
+      case '>':
+        this.consume();
+        charState = LexerState.S_RIGHT_ANGLE;
+        break;
+
+      case '&':
+        this.consume();
+        charState = LexerState.S_AMPERSAND;
+        break;
+
+      case '|':
+        this.consume();
+        charState = LexerState.S_PIPE;
+        break;
+
+      case '$':
+        this.consume();
+        charState = LexerState.S_DOLLAR;
+        break;
+
+      case '{':
+        this.consume();
+        this.pushToken(TokenIdentifiers.LEFT_CURLY_SYMB);
+        break;
+
+      case '}':
+        this.consume();
+        this.pushToken(TokenIdentifiers.RIGHT_CURLY_SYMB);
+        break;
+
+      case '(':
+        this.consume();
+        this.pushToken(TokenIdentifiers.LEFT_PARENTHESIS_SYMB);
+        break;
+
+      case ')':
+        this.consume();
+        this.pushToken(TokenIdentifiers.RIGHT_PARENTHESIS_SYMB);
+        break;
+
+      case ';':
+        this.consume();
+        this.pushToken(TokenIdentifiers.SEMICOLON_SYMB);
+        break;
+
+      case ',':
+        this.consume();
+        this.pushToken(TokenIdentifiers.COMMA_SYMB);
+        break;
+
+      default:
+        if (/[a-zA-Z_]/.test(this.look)) {
+          this.consume();
+          charState = LexerState.S_IDENTIFIER;
+        } else if (/[0-9]/.test(this.look)) {
+          this.consume();
+          charState = LexerState.S_INT;
+        } else {
+          this.reject();
+        };
     };
 
-    const tempTokens = this.tokens;
+    return charState;
+  };
+
+  private reject(custom: string | null = null) {
+
+    this.updateTokenInfoData(InfoUpdateType.END);
+    if (!custom) {
+      this.message = `Unexpected character!`;
+      this.state = LexerState.S_REJECT;
+    } else {
+      this.message = custom;
+      this.state = LexerState.S_C_REJECT;
+    };
+  };
+
+  public reset() {
     this.tokens = [];
+    this.matching = "";
+    this.message = "";
+    this.index = 0;
+    this.state = LexerState.S_INITIAL;
+    this.position = new LinePosition();
+    this.info = new TokenInformation();
+  };
 
-    return tempTokens;
+
+  public execute() {
+    this.checkInput();
+    try {
+      while (true) {
+        switch (this.state) {
+          case LexerState.S_INITIAL: {
+            switch (this.look) {
+              case undefined:
+                this.state = LexerState.S_TERMINATE;
+                break;
+
+              default:
+                this.updateTokenInfoData(InfoUpdateType.START);
+                this.updateTokenInfoData(InfoUpdateType.END);
+                this.state = this.updateState();
+            };
+            break;
+          };
+
+          case LexerState.S_TERMINATE: {
+            break;
+          };
+
+          case LexerState.S_REJECT: {
+            throw new GolosinaExceptions.Frontend.TokenizerError("Unexpected character!", this.info);
+          };
+
+          case LexerState.S_C_REJECT: {
+            throw new GolosinaExceptions.Frontend.TokenizerError(this.message, this.info);
+          };
+
+          case LexerState.S_COMMENT: {
+            switch (this.look) {
+              case "\n":
+              case undefined:
+                this.state = LexerState.S_INITIAL;
+                break;
+
+              default:
+                this.eat();
+            };
+            break;
+          };
+
+          case LexerState.S_STRING: {
+            switch (this.look) {
+              case `"`:
+                this.eat();
+                this.pushToken(TokenIdentifiers.STRING_LITERAL);
+                break;
+
+              case "\0":
+                this.reject(`Unexpected "EOF" before string termination!`);
+                break;
+
+              default:
+                this.consume();
+            };
+            break;
+          };
+
+          case LexerState.S_IDENTIFIER: {
+            if (/[a-zA-Z_]/.test(this.look) && this.look !== undefined) {
+              this.consume();
+            } else if (this.table.has(this.matching)) {
+              this.pushToken(this.table.get(this.matching) as TokenIdentifiers);
+            } else {
+              this.pushToken(TokenIdentifiers.IDENT);
+            };
+            break;
+          };
+
+          case LexerState.S_INT: {
+            if (/[0-9]/.test(this.look)) {
+              this.consume();
+            } else if (/[\\.]/.test(this.look)) {
+              this.consume();
+              this.state = LexerState.S_INT_PERIOD;
+            } else {
+              this.pushToken(TokenIdentifiers.INTEGER_LITERAL);
+            };
+            break;
+          };
+
+          case LexerState.S_INT_PERIOD: {
+            if (/[0-9]/.test(this.look)) {
+              this.consume();
+              this.state = LexerState.S_FLOAT;
+            } else {
+              this.reject();
+            };
+            break;
+          };
+
+          case LexerState.S_FLOAT: {
+            if (/[0-9]/.test(this.look)) {
+              this.consume();
+            } else {
+              this.pushToken(TokenIdentifiers.FLOAT_LITERAL);
+            };
+            break;
+          };
+
+          case LexerState.S_EQUAL: {
+            switch (this.look) {
+              case "=":
+                this.consume();
+                this.pushToken(TokenIdentifiers.BINARY_EQUALITY);
+                break;
+
+              default:
+                this.pushToken(TokenIdentifiers.EQUAL_SYMB);
+            };
+            break;
+          };
+
+          case LexerState.S_PLUS: {
+            switch (this.look) {
+              case "+":
+                this.consume();
+                this.pushToken(TokenIdentifiers.UNARY_INCREMENT);
+                break;
+
+              case "=":
+                this.consume();
+                this.pushToken(TokenIdentifiers.PLUS_EQ_SYMB);
+                break;
+
+              default:
+                this.pushToken(TokenIdentifiers.PLUS_SYMB);
+            };
+            break;
+          };
+
+          case LexerState.S_MINUS: {
+            switch (this.look) {
+              case "-":
+                this.consume();
+                this.pushToken(TokenIdentifiers.UNARY_DECREMENT);
+                break;
+
+              case ">":
+                this.consume();
+                this.pushToken(TokenIdentifiers.ARROW_SYMB);
+                break;
+
+              case "=":
+                this.consume();
+                this.pushToken(TokenIdentifiers.MINUS_EQ_SYMB);
+                break;
+
+              default:
+                this.pushToken(TokenIdentifiers.MINUS_SYMB);
+            };
+            break;
+          };
+
+          case LexerState.S_STAR: {
+            switch (this.look) {
+              case "*":
+                this.consume();
+                this.pushToken(TokenIdentifiers.EXPONENTIAL_SYMB);
+                break;
+
+              case "=":
+                this.consume();
+                this.pushToken(TokenIdentifiers.STAR_EQ_SYMB);
+                break;
+
+              default:
+                this.pushToken(TokenIdentifiers.STAR_SYMB);
+            };
+            break;
+          };
+
+          case LexerState.S_SLASH: {
+            switch (this.look) {
+              case "=":
+                this.consume();
+                this.pushToken(TokenIdentifiers.SLASH_EQ_SYMB);
+                break;
+
+              default:
+                this.pushToken(TokenIdentifiers.SLASH_SYMB);
+            };
+            break;
+          };
+
+          case LexerState.S_PERCENT: {
+            switch (this.look) {
+              case "=":
+                this.consume();
+                this.pushToken(TokenIdentifiers.PERCENTAGE_EQ_SYMB);
+                break;
+
+              default:
+                this.pushToken(TokenIdentifiers.PERCENTAGE_SYMB);
+            };
+            break;
+          };
+
+          case LexerState.S_LEFT_ANGLE: {
+            switch (this.look) {
+              case "=":
+                this.consume();
+                this.pushToken(TokenIdentifiers.LEFT_ANGLE_BRACKET_EQ_SYMB);
+                break;
+
+              default:
+                this.pushToken(TokenIdentifiers.LEFT_ANGLE_BRACKET_SYMB);
+            };
+            break;
+          };
+
+          case LexerState.S_RIGHT_ANGLE: {
+            switch (this.look) {
+              case "=":
+                this.consume();
+                this.pushToken(TokenIdentifiers.RIGHT_ANGLE_BRACKET_EQ_SYMB);
+                break;
+
+              default:
+                this.pushToken(TokenIdentifiers.RIGHT_ANGLE_BRACKER_SYMB);
+            };
+            break;
+          };
+
+          case LexerState.S_AMPERSAND: {
+            switch (this.look) {
+              case "&":
+                this.consume();
+                this.pushToken(TokenIdentifiers.BINARY_AND);
+                break;
+
+              default:
+                this.pushToken(TokenIdentifiers.AMPERSAND_SYMB);
+            };
+            break;
+          };
+
+          case LexerState.S_PIPE: {
+            switch (this.look) {
+              case "|":
+                this.consume();
+                this.pushToken(TokenIdentifiers.BINARY_OR);
+                break;
+
+              default:
+                this.pushToken(TokenIdentifiers.PIPE_SYMB);
+            };
+            break;
+          };
+
+          case LexerState.S_DOLLAR: {
+            switch (this.look) {
+              case "<":
+                this.consume();
+                this.pushToken(TokenIdentifiers.DOLLAR_LEFT_ANGLE_BRACKET_SYMB);
+                break;
+
+              default:
+                this.reject();
+            };
+            break;
+          };
+
+          case LexerState.S_EXCLAMATION: {
+            switch (this.look) {
+              case "=":
+                this.pushToken(TokenIdentifiers.BINARY_INEQUALITY);
+                break;
+
+              default:
+                this.pushToken(TokenIdentifiers.EXCLMATION_SYMB);
+            };
+          };
+        };
+
+        if (this.state === LexerState.S_TERMINATE) {
+          break;
+        };
+      };
+      this.matching = "EOF";
+      this.pushToken(TokenIdentifiers.EOF_T);
+    } catch (e) {
+      ErrorReporter.ReportLexerError(e);
+    };
+
+    return this.tokens;
   };
 };
+
 
 export default Lexer;

@@ -3,71 +3,51 @@ import { TokenInformation } from "../../frontend/lexer/token";
 import { RuntimeObjects, RuntimeValues } from "./runtime_values";
 import RuntimeValueTypeGuard from "../../guards/runtime_value_guards";
 
-interface CheckerDataBase {
-  info: TokenInformation;
-  value: RuntimeValues.Value;
-}
-
-interface CheckerData extends CheckerDataBase {
-
-  /*
-    Identifier For Error
-    @type string
-    @type null
-  */
-  
-  ident: string | null;
-
-  /**
-    Custom Message
-    @type string
-    @type null
-  */
-      
-  message: string | null;
-};
-
 /**
   The runtime typecheker.
 */
 
 class GolosinaTypeChecker {
-  public checkBinaryArithmetic(op: string, left: CheckerDataBase, right: CheckerDataBase): { lhs: RuntimeObjects.ValueObject, rhs: RuntimeObjects.ValueObject }{
-    if (!RuntimeValueTypeGuard.isObjectValue(left.value) || !RuntimeValueTypeGuard.isObjectValue(right.value)) {
-      throw new GolosinaExceptions.Runtime.TypeError(`Unexpected values near operand "${op}" in arithmetic expression!`, left.info);
+  public checkBinaryArithmetic(op: string, left: RuntimeValues.AbstractValue, right: RuntimeValues.AbstractValue): { lhs: RuntimeObjects.ValueObject, rhs: RuntimeObjects.ValueObject } {
+    if (left instanceof RuntimeObjects.ValueObject === false || right instanceof RuntimeObjects.ValueObject === false) {
+      throw new GolosinaExceptions.Backend.TypeError(`Unexpected values near operand "${op}" in arithmetic expression!`);
+    };
+
+    if (!RuntimeValueTypeGuard.isObjectValue(left) || !RuntimeValueTypeGuard.isObjectValue(right)) {
+      throw new GolosinaExceptions.Backend.TypeError(`Unexpected values near operand "${op}" in arithmetic expression!`);
     };
 
     const stringSafeOperators = new Set(["+", "==", "!=", ">", "<", ">=", "<="])
 
-    if (((left.value.isString() && right.value.isString())) && !stringSafeOperators.has(op)) {
-      throw new GolosinaExceptions.Runtime.TypeError(`Attempted to perform string concatenation with invalid operand "${op}"`, left.info);
+    if (((left.isString() && right.isString())) && !stringSafeOperators.has(op)) {
+      throw new GolosinaExceptions.Backend.TypeError(`Attempted to perform string concatenation with invalid operand "${op}"`);
     };
 
-    if ((left.value.isString() && !right.value.isString()) ||(!left.value.isString() && right.value.isString())) {
-      throw new GolosinaExceptions.Runtime.TypeError(`Unsupported object types on near operand "${op}": "${left.value.typename}" and "${right.value.typename}"`, left.info);
-    } else if (!left.value.isString() && !right.value.isString()) {
-      if (left.value.isNumeric() !== right.value.isNumeric()) {
-        throw new GolosinaExceptions.Runtime.TypeError(`Unsupported object types near operand "${op}": "${left.value.typename}" and "${right.value.typename}"`, left.info);
+    if ((left.isString() && !right.isString()) || (!left.isString() && right.isString())) {
+      throw new GolosinaExceptions.Backend.TypeError(`Unsupported object types on near operand "${op}": "${left.typename}" and "${right.typename}"`);
+    } else if (!left.isString() && !right.isString()) {
+      if (left.isNumeric() !== right.isNumeric()) {
+        throw new GolosinaExceptions.Backend.TypeError(`Unsupported object types near operand "${op}": "${left.typename}" and "${right.typename}"`);
       };
     };
 
     return {
-      lhs: left.value,
-      rhs: right.value
+      lhs: left,
+      rhs: right
     };
   };
 
-  public checkUnaryExpr(data: Omit<CheckerData, "message">, operandName: string): RuntimeObjects.NumericObject  {
-  
-    if (!RuntimeValueTypeGuard.isObjectValue(data.value)) {
-      throw new GolosinaExceptions.Runtime.TypeError(`Attempted to perform unary expression on non valid object type!`, data.info);
+  public checkUnaryExpr(arg: RuntimeValues.AbstractValue, op: string): RuntimeObjects.ValueObject {
+
+    if (!RuntimeValueTypeGuard.isObjectValue(arg)) {
+      throw new GolosinaExceptions.Backend.TypeError(`Attempted to perform unary expression on non valid object type!`);
     };
 
-    if (!data.value.isNumeric()){
-      throw new GolosinaExceptions.Runtime.TypeError(`Unsupported object type near unary operand "${operandName}"`, data.info);  
+    if (!arg.isNumeric() && op !== "!") {
+      throw new GolosinaExceptions.Backend.TypeError(`Unsupported object type near unary operand "${op}"`);
     };
 
-    return data.value;
+    return arg;
   };
 
   /**
@@ -76,7 +56,7 @@ class GolosinaTypeChecker {
 
   public checkMethod(data: Omit<CheckerData, "message">): RuntimeValues.Method | RuntimeValues.MethodNative {
     if (!RuntimeValueTypeGuard.isMethod(data.value) && !RuntimeValueTypeGuard.isNativeMethod(data.value)) {
-      throw new GolosinaExceptions.Runtime.TypeError(`Attempted to perform call expression on a resolved non-method at "${data.ident}"!`, data.info);
+      throw new GolosinaExceptions.Backend.TypeError(`Attempted to perform call expression on a resolved non-method at "${data.ident}"!`, data.info);
     };
 
     return data.value;
@@ -96,18 +76,18 @@ class GolosinaTypeChecker {
     Checks if runtime value is a valid object or reference to object
   */
 
-  public checkObject(data: CheckerData): (RuntimeValues.Object | RuntimeValues.Variable) {
-    if (!RuntimeValueTypeGuard.isObject(data.value) && !RuntimeValueTypeGuard.isVariable(data.value)) {
-      let message: string = `${data.message || "Attempted to reference a non-object"}`;
+  public checkObject(data: RuntimeValues.AbstractValue): RuntimeValues.Object {
+    if (!RuntimeValueTypeGuard.isObject(data) && !RuntimeValueTypeGuard.isVariable(data)) {
+      let message: string = "Attempted to reference a non-object";
 
-      if (data.ident) {
-        message += ` at "${data.ident}"`;
-      };
-      
-      throw new GolosinaExceptions.Runtime.TypeError(message, data.info);
+      throw new GolosinaExceptions.Backend.TypeError(message);
     };
-    
-    return data.value;
+
+    if (RuntimeValueTypeGuard.isVariable(data)) {
+      return data.value;
+    } else {
+      return data;
+    };
   };
 };
 

@@ -1,83 +1,74 @@
 import GolosinaExceptions from "./exceptions";
-import { styleText } from "util";
+import fs from "node:fs"
+import { TokenInformation } from "../frontend/lexer/token";
+import ReporterMetaData from "./reporter_meta_data";
+import { styleText } from "node:util";
 
 class ErrorReporter {
-  /*
-    Error "stack", we need it so we can report multiple errors at once.
-  */
-
   /*
     syntax error collector.
   */
 
-  public static syntaxErrors: GolosinaExceptions.Frontend.SyntaxError[] = [];
+  private static SyntaxErrors: GolosinaExceptions.Frontend.SyntaxError[] = [];
 
-  public static runtime(error: Error) {
-    // we only expect a single error
+  private static LinePadding(info: TokenInformation) {
+    process.stdout.write(" ".repeat(info.position.start.line.toString().length + 1));
+    process.stdout.write(styleText("gray", "| "));
+  };
 
-    if (error && (error instanceof GolosinaExceptions.Runtime.RuntimeError || error instanceof GolosinaExceptions.Runtime.EnvironmentError)) {
-      console.error(error.name, error.message);
-      process.exit(1);
+  private static UpdateReporter(path: string) {
+    if (path !== ReporterMetaData.FilePath) {
+      ReporterMetaData.FilePath = path;
+      ReporterMetaData.Input = fs.readFileSync(path, "utf8");
     };
   };
 
-  public static syntax() {
-    if (ErrorReporter.syntaxErrors.length > 0) {
-      for (const error of ErrorReporter.syntaxErrors) {
-        const formattedLineStart = styleText("gray", `${String(error.at.position.start.line)} | `);
+  private static LogLineInfo(info: TokenInformation, path: string) {
+    this.UpdateReporter(path);
+    process.stdout.write(styleText("gray", `${info.position.start.line} | `));
+    for (let i = info.offset.start; i < info.offset.end; ++i) {
+      process.stdout.write(ReporterMetaData.Input[i]);
+    };
 
-        process.stdout.write(`${formattedLineStart}`);
-        // temporary solution, later im gonna keep track of the character offset as well as the line + char number. For now we can just do this.
+    process.stdout.write("\n");
 
-        for (let i = error.startOffset; i < error.endOffset; ++i) {
-          const char = error.input[i];
+    this.LinePadding(info);
 
-          if (char === "\n") {
-            break;
-          };
+    for (let i = info.offset.start; i < info.offset.end; ++i) {
+      process.stdout.write(styleText("red", "^").repeat(1));
+    };
 
-          process.stdout.write(char);
-        };
-        
-        process.stdout.write("\n");
-        process.stdout.write(" ".repeat(String(error.at.position.start.line).length + 3));
+    process.stdout.write("\n\n");
 
-        let isInRange = false;
-        
-        for (let i = error.startOffset; i < error.endOffset; ++i) {
+    this.LinePadding(info);
+  };
 
-          if (i === error.at.offset.start) {
-            isInRange = true;
-          };
-          
-          if (i === error.at.offset.end) {
-            isInRange= false;  
-          };
+  public static ReportRuntimeError() {
 
-          
-          if (!isInRange) {
-            process.stdout.write(" ");
-          } else {
-            process.stdout.write(styleText("redBright","^".repeat(error.input[i].length)))
-          };
-        };
+  };
 
+  public static ReportLexerError(error: GolosinaExceptions.Frontend.TokenizerError) {
+    this.LogLineInfo(error.at, ReporterMetaData.Input);
+    process.exit(1);
+  };
 
-        process.stdout.write(" ".repeat(String(error.at.position.start.line).length + 3));
+  public static PushParserError(error: GolosinaExceptions.Frontend.SyntaxError) {
+    this.SyntaxErrors.push(error);
+  };
 
-        process.stdout.write("\n\n");
-        process.stdout.write(" ".repeat(String(error.at.position.start.line).length + 3));
+  public static UnwindParserErrors() {
+    for (const error of this.SyntaxErrors) {
+      this.LogLineInfo(error.at, error.path);
+      process.stdout.write(styleText("bold", `In file ${styleText("underline", `${error.path}:${error.at.position.start.line}:${error.at.position.start.char}`)}`));
+      process.stdout.write("\n\n");
+      this.LinePadding(error.at);
+      process.stdout.write(styleText("bgRedBright", `${error.name}`));
+      process.stdout.write(": ");
+      process.stdout.write(styleText("bold", error.message));
+      process.stdout.write("\n\n");
+    };
 
-        process.stdout.write(`${styleText("bgRed", `${error.name}:`)} ${styleText("bold", `${error.message}\n\n`)}`);
-
-        const formattedFileName = styleText("bold", `"${error.file}"`);
-        process.stdout.write(" ".repeat(String(error.at.position.start.line).length + 3));
-
-        process.stdout.write(`In File: ${formattedFileName} at (line: ${error.at.position.start.line}, char: ${error.at.position.start.char})`);
-
-        process.stdout.write("\n\n");
-      };
-
+    if (this.SyntaxErrors.length > 0) {
       process.exit(1);
     };
   };
