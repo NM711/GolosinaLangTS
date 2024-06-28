@@ -54,21 +54,21 @@ class GolosinaTypeChecker {
     Checks if runtime value is a valid method.
   */
 
-  public checkMethod(data: Omit<CheckerData, "message">): RuntimeValues.Method | RuntimeValues.MethodNative {
-    if (!RuntimeValueTypeGuard.isMethod(data.value) && !RuntimeValueTypeGuard.isNativeMethod(data.value)) {
-      throw new GolosinaExceptions.Backend.TypeError(`Attempted to perform call expression on a resolved non-method at "${data.ident}"!`, data.info);
+  public checkMethod(data: RuntimeValues.AbstractValue): RuntimeValues.Method | RuntimeValues.MethodNative {
+    if (!RuntimeValueTypeGuard.isMethod(data) && !RuntimeValueTypeGuard.isNativeMethod(data)) {
+      throw new GolosinaExceptions.Backend.TypeError(`Attempted to perform call expression on non-method!`);
     };
 
-    return data.value;
+    return data;
   };
 
   /**
     Matches the length of the provided method arguments with the expected params
   */
 
-  public checkArgLengthMatch(data: { info: TokenInformation, ident: string, argsLength: number, paramsLength: number }) {
-    if (data.argsLength !== data.paramsLength) {
-      throw new GolosinaExceptions.Runtime.TypeError(`Given argument length does not match with expected param length. Received ${data.argsLength} expected ${data.paramsLength} at "${data.ident}"!`, data.info);
+  public checkArgLengthMatch(argLen: number, paramLen: number) {
+    if (argLen !== paramLen) {
+      throw new GolosinaExceptions.Backend.TypeError(`Given argument length does not match with expected param length. Received "${argLen}" expected "${paramLen}"!`);
     };
   };
 

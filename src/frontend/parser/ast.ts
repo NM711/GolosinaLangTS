@@ -268,7 +268,9 @@ export namespace SyntaxTree {
       super(NodeIdentifiers.N_BREAK_STMNT, "BreakStatement", info);
     };
 
-    public override acceptEvalVisitor(visitor: VisitorTypes.TEvaluatorVisitor): RuntimeValues.AbstractValue { };
+    public override acceptEvalVisitor(visitor: VisitorTypes.TEvaluatorVisitor): RuntimeValues.AbstractValue { 
+      return visitor.visitBreakStmnt(this);
+    };
   };
 
   export class ContinueStatementNode extends BaseNodeAST {
@@ -276,7 +278,9 @@ export namespace SyntaxTree {
       super(NodeIdentifiers.N_CONTINUE_STMNT, "ContinueStatement", info);
     };
 
-    public override acceptEvalVisitor(visitor: VisitorTypes.TEvaluatorVisitor): RuntimeValues.AbstractValue { };
+    public override acceptEvalVisitor(visitor: VisitorTypes.TEvaluatorVisitor): RuntimeValues.AbstractValue { 
+      return visitor.visitContinueStmnt(this);
+    };
   };
 
   export class ReturnStatementNode extends BaseNodeAST {

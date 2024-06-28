@@ -1,5 +1,6 @@
 import ASTVisitor from "./evaluator";
 import type { SyntaxTree } from "../../frontend/parser/ast";
+import ErrorReporter from "../../errors/reporter";
 
 /*
   Im learning the visitor pattern for a clean c++ implementation, so this typescript implementation is but a test run.
@@ -22,11 +23,10 @@ class Walker {
     try {
       for (const node of this.source) {
         const returned = node.acceptEvalVisitor(this.visitor);
-        console.log(returned)
       };
 
     } catch (e) {
-      console.error(e)
+      ErrorReporter.ReportRuntimeError(e);
     };
   };
 };

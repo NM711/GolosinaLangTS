@@ -129,11 +129,7 @@ class Parser {
   };
 
   private get look(): Token {
-    if (this.index < this.tokens.length) {
-      return this.tokens[this.index]
-    } else {
-      return this.tokens[this.index - 1];
-    };
+    return this.tokens[this.index];
   };
 
   private eat(): void {
@@ -217,7 +213,7 @@ class Parser {
     this.validator.expect.leftCurly(this.look);
     this.eat();
 
-    while (true) {
+    while (!this.helpers.isRightCurly(this.look)) {
       const member = new SyntaxTree.DirectMemberNode(this.look.info);
       member.key = this.validator.expect.ident(this.parsePrimary(), "member key identifier!");
 
@@ -298,7 +294,7 @@ class Parser {
     expr.callee = this.validator.expect.memberOrIdent(lhs);
     this.eat();
 
-    while (true) {
+    while (!this.helpers.isRightParen(this.look)) {
       const arg = this.parseExpr();
       expr.arguments.push(arg);
 
@@ -312,9 +308,9 @@ class Parser {
 
     this.validator.expect.rightParenthesis(this.look);
     this.eat();
-
+    
     lhs = expr;
-
+    
     return lhs;
   };
 
@@ -773,7 +769,7 @@ class Parser {
 
         if (e instanceof GolosinaExceptions.Frontend.SyntaxError) {
           // console.log(e.message)
-          // // console.error(e)
+          // // !console.error(e)
           // // e.offsets = this.track.getOffset;
           // // console.log(e.offsets)
         };

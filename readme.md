@@ -1,6 +1,8 @@
 # GolosinaLang
 
 
+*Undergoing rewrite, if for some reason the interpreter is not working revert back to commit "921c0309edaf965e730f60dca4a0d491c0907a51"*
+
 #### NOTE:
 This is the closest thing I will make to an official specification for the time being.
 This is not meant to be a super in-depth writeup. Rather something that aims to be practical in order to grasp the basics of the language and its
@@ -201,4 +203,42 @@ the interpreter will throw an error mentioning the fact that the member you are 
   };
 
   fmt->print(inheritFromMyObj->x);
+```
+
+
+## Running
+
+You can run golosina by doing the following
+
+
+```
+  git clone https://github.com/NM711/GolosinaLangTS.git
+```
+
+```
+  cd GolosinaLangTS
+```
+
+```
+  npm install
+```
+
+### Running The Repl
+
+```
+  npm run repl
+```
+
+
+### Running Files
+
+```
+  npm run golosina -- <your-file-path-here> <flags>
+```
+
+#### Flags
+
+`````
+  --dump-ast    # This will print the AST in JSON format
+  --dump-tokens # This will print the tokens also in JSON format
 ```

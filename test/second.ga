@@ -46,10 +46,6 @@ const Calculator = clone Object {
 };
 
 
-for (const x = 10; x < 5; ++x) {
-	
-};
-
 Calculator->probability(10, 3);
 Calculator->solids->cimcumference(6);
 Calculator->solids->volumes->prism(10, 9);

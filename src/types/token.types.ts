@@ -4,8 +4,6 @@ export enum InfoUpdateType {
 };
 
 export enum LexerState {
-  S_REJECT,
-  S_C_REJECT,
   S_TERMINATE,
   S_INITIAL,
   S_COMMENT,

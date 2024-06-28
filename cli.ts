@@ -52,7 +52,7 @@ class GolosinaCommandLineInterface {
       };
 
       Interpreter.walker.setSource = tree;
-      // Interpreter.walker.execute();
+      Interpreter.walker.execute();
     }; 
   };
 };

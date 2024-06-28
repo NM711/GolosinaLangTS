@@ -3,18 +3,77 @@ import { SyntaxTree } from "../../frontend/parser/ast";
 import { RuntimeObjects, RuntimeValues } from "./runtime_values";
 import { DataType } from "../../common";
 import GolosinaTypeChecker from "./typechecker";
-import Environment from "./environment";
+import Environment, { ScopeIdentifier } from "./environment";
 import RuntimeValueTypeGuard from "../../guards/runtime_value_guards";
 import TreeNodeTypeGuard from "../../guards/node_gurads";
+import GolosinaExceptions from "../../errors/exceptions";
+import NativeObjects from "../native/native_objects";
+
+
+enum DispatchState {
+  NONE,
+  BREAK,
+  CONTINUE,
+  RETURN,
+};
 
 class ASTEvaluator extends VisitorTypes.AbstractVisitor<RuntimeValues.AbstractValue> {
   private environment: Environment;
   private tc: GolosinaTypeChecker;
+  private dispatcher: DispatchState;
 
+  /**
+    Context of the last accessed Golosina Object. Necessary for "this" injection into scope during
+    expression call evaluation.
+  */
+  
+  private context: RuntimeValues.Object | null;
+  
   constructor() {
     super();
     this.environment = new Environment();
     this.tc = new GolosinaTypeChecker();
+    this.dispatcher = DispatchState.NONE;
+    this.context = null;
+    this.inject();
+  };
+
+  /**
+    Converts V8 runtime values to golosina objects.
+  */
+
+  private conversion(value: any): RuntimeValues.AbstractValue {
+    if (typeof value === "string") {
+      return new RuntimeObjects.StringObject(value);
+    } else if (typeof value === "number") {
+      return (Number.isInteger(value)) ? new RuntimeObjects.IntegerObject(value) : new RuntimeObjects.FloatObject(value);
+    } else if (typeof value === "undefined") {
+      return new RuntimeObjects.NullObject();
+    } else if (typeof value === "object") {
+
+      if (RuntimeValueTypeGuard.isObject(value)) {
+        return value;
+      } else if (value.constructor === Array) {
+        const vec = new RuntimeObjects.VectorObject();
+        vec.setElements(value);
+        return vec;
+      } else {
+        return new RuntimeObjects.NullObject();
+      }
+
+    } else {
+      throw new GolosinaExceptions.Backend.RuntimeError(`Unexpected conversion from v8 runtime value to golosina runtime value!`);
+    };
+
+  };
+
+  /**
+    Injects objects into the environment
+  */
+
+  private inject() {
+    this.environment.declare("Object", new RuntimeValues.Object());
+    this.environment.declare("fmt", NativeObjects.getFmt);
   };
 
   public override visitBinaryExpr(node: SyntaxTree.BinaryExpressionNode): RuntimeValues.AbstractValue {
@@ -99,20 +158,20 @@ class ASTEvaluator extends VisitorTypes.AbstractVisitor<RuntimeValues.AbstractVa
       case "++":
         if (node.isPrefix && evaled.isNumeric()) {
           evaled.primitive += 1;
-          this.environment.assign(this.environment.lastResolved, evaled);
+          this.environment.assign(this.environment.lastResolvedSymbol, evaled);
           return evaled;
         };
 
         if (evaled.isFloat()) {
           const old = new RuntimeObjects.FloatObject(evaled.primitive);
           evaled.primitive += 1;
-          this.environment.assign(this.environment.lastResolved, evaled);
+          this.environment.assign(this.environment.lastResolvedSymbol, evaled);
 
           return old;
         } else if (evaled.isInt()) {
           const old = new RuntimeObjects.IntegerObject(evaled.primitive);
           evaled.primitive += 1;
-          this.environment.assign(this.environment.lastResolved, evaled);
+          this.environment.assign(this.environment.lastResolvedSymbol, evaled);
 
           return old;
         };
@@ -123,7 +182,7 @@ class ASTEvaluator extends VisitorTypes.AbstractVisitor<RuntimeValues.AbstractVa
 
         if (node.isPrefix && evaled.isNumeric()) {
           evaled.primitive -= 1;
-          this.environment.assign(this.environment.lastResolved, evaled);
+          this.environment.assign(this.environment.lastResolvedSymbol, evaled);
 
           return evaled;
         };
@@ -131,13 +190,13 @@ class ASTEvaluator extends VisitorTypes.AbstractVisitor<RuntimeValues.AbstractVa
         if (evaled.isFloat()) {
           const old = new RuntimeObjects.FloatObject(evaled.primitive);
           evaled.primitive -= 1;
-          this.environment.assign(this.environment.lastResolved, evaled);
+          this.environment.assign(this.environment.lastResolvedSymbol, evaled);
 
           return old;
         } else if (evaled.isInt()) {
           const old = new RuntimeObjects.IntegerObject(evaled.primitive);
           evaled.primitive -= 1;
-          this.environment.assign(this.environment.lastResolved, evaled);
+          this.environment.assign(this.environment.lastResolvedSymbol, evaled);
           return old;
         };
         break;
@@ -202,7 +261,7 @@ class ASTEvaluator extends VisitorTypes.AbstractVisitor<RuntimeValues.AbstractVa
         return new RuntimeObjects.IntegerObject(parseInt(node.value));
       case DataType.T_STRING:
         return new RuntimeObjects.StringObject(node.value);
-      case DataType.T_NULL:
+      default:
         return new RuntimeObjects.NullObject();
     };
   };
@@ -218,6 +277,13 @@ class ASTEvaluator extends VisitorTypes.AbstractVisitor<RuntimeValues.AbstractVa
     };
 
     return golosinaCustomObject;
+  };
+
+  public override visitModuleStmnt(node: SyntaxTree.ModuleStatemenetNode): RuntimeValues.AbstractValue {
+    const golosinaModule = new RuntimeValues.Module();
+    this.environment.declare(node.ident.name, golosinaModule);
+    this.environment.lastResolvedModuleSymbol = node.ident.name;
+    return golosinaModule;
   };
 
   public override visitVarDecStmnt(node: SyntaxTree.VariableDeclarationStatementNode): RuntimeValues.AbstractValue {
@@ -241,19 +307,170 @@ class ASTEvaluator extends VisitorTypes.AbstractVisitor<RuntimeValues.AbstractVa
   };
 
   public override visitMemberExpr(node: SyntaxTree.MemberExpressionNode): RuntimeValues.AbstractValue {
-    
+    const resolved = node.parent.acceptEvalVisitor(this);
+    const golosinaObject = this.tc.checkObject(resolved);
+    this.context = golosinaObject;
+    return golosinaObject.getMember(node.accessing.name);
   }
 
   public override visitCallExpr(node: SyntaxTree.ExpressionCallNode): RuntimeValues.AbstractValue {
-    const objectContext = node.callee.acceptEvalVisitor(this);
+    const resolved = node.callee.acceptEvalVisitor(this);
+    const golosinaMethod = this.tc.checkMethod(resolved);
     
+    if (RuntimeValueTypeGuard.isNativeMethod(golosinaMethod)) {
 
+      if (golosinaMethod.paramState === RuntimeValues.ParamState.FIXED) {
+        this.tc.checkArgLengthMatch(node.arguments.length, golosinaMethod.exec.length);
+      };
+
+      const runtimeArguments: RuntimeValues.Object[] = [];
+
+      for (const arg of node.arguments) {
+        const value = arg.acceptEvalVisitor(this);
+        runtimeArguments.push(this.tc.checkObject(value));
+      };
+
+      const v8Primitve = golosinaMethod.exec(...runtimeArguments);
+
+      // we need to convert v8 pritimitves into actual golosina objects.
+
+      return this.conversion(v8Primitve);
+
+    } else {
+
+      this.tc.checkArgLengthMatch(node.arguments.length, golosinaMethod.params.length)
+
+      this.environment.pushScope(ScopeIdentifier.S_METHOD);
+
+      if (this.context) {
+        this.environment.declare("this", this.context);
+      };
       
+
+      // inject arguments locally.
+
+      for (let i = 0; i < golosinaMethod.params.length; ++i) {
+        const arg = node.arguments[i];
+        const param = golosinaMethod.params[i];
+        const value = arg.acceptEvalVisitor(this);
+        this.environment.declare(param.name, value);
+      };
+
+      const returnedFromBlock = golosinaMethod.block.acceptEvalVisitor(this);
+
+      this.environment.popScope();
+      this.context = null;
+      return returnedFromBlock;
+    };
+  };
+
+  public override visitReturnStmnt(node: SyntaxTree.ReturnStatementNode): RuntimeValues.AbstractValue {
+    this.dispatcher = DispatchState.RETURN;
+    return node.expr.acceptEvalVisitor(this);
+  };
+  
+  public override visitBreakStmnt(node: SyntaxTree.BreakStatementNode): RuntimeValues.AbstractValue {
+    this.dispatcher = DispatchState.BREAK;
+    return new RuntimeObjects.NullObject();
+  };
+
+  public override visitContinueStmnt(node: SyntaxTree.ContinueStatementNode): RuntimeValues.AbstractValue {
+    this.dispatcher = DispatchState.CONTINUE;
+    return new RuntimeObjects.NullObject();
+  };
+
+  public override visitIfStmnt(node: SyntaxTree.IfStatementNode): RuntimeValues.AbstractValue {
+    const expr = node.condition.acceptEvalVisitor(this);
+
+    if (RuntimeValueTypeGuard.isObjectValue(expr) && expr.primitive) {
+      return node.block.acceptEvalVisitor(this);
+    } else if (node.alternate) {
+      return node.alternate.acceptEvalVisitor(this);
+    } else {
+      return expr;
+    };
+  };
+
+  public override visitForStmnt(node: SyntaxTree.ForStatementNode): RuntimeValues.AbstractValue {
+    this.environment.pushScope(ScopeIdentifier.S_LOOP);
+
+    node.init.acceptEvalVisitor(this);
+
+    while (true) {
+      const expr = node.condition.acceptEvalVisitor(this);
+      if (!expr || (RuntimeValueTypeGuard.isObjectValue(expr) && expr && !expr.primitive)) {
+        break;
+      };
+
+      const value = node.block.acceptEvalVisitor(this);
+
+      let state = this.dispatcher;
+      this.dispatcher = DispatchState.NONE;
+
+      if (state === DispatchState.RETURN) {
+        return value;
+      } else if (state === DispatchState.BREAK) {
+        break;
+      } else if (state === DispatchState.CONTINUE) {
+        node.update.acceptEvalVisitor(this);
+        continue;
+      } else {
+        node.update.acceptEvalVisitor(this);
+      };
+    };
+
+    return new RuntimeObjects.NullObject();
+  };
+
+  public override visitWhileStmnt(node: SyntaxTree.WhileStatementNode): RuntimeValues.AbstractValue {
+    while (true) {
+      const expr = node.condition.acceptEvalVisitor(this);
+
+      if (!expr || (RuntimeValueTypeGuard.isObjectValue(expr) && expr && !expr.primitive)) {
+        break;
+      };
+
+      const value = node.block.acceptEvalVisitor(this);
+
+      let state = this.dispatcher;
+      this.dispatcher = DispatchState.NONE;
+
+
+      if (state === DispatchState.RETURN) {
+        return value;
+      } else if (state === DispatchState.BREAK) {
+        break;
+      } else if (state === DispatchState.CONTINUE) {
+        continue;
+      };
+    };
+
+    return new RuntimeObjects.NullObject();
   };
 
   public override visitBlockStmnt(node: SyntaxTree.BlockStatementNode): RuntimeValues.AbstractValue {
-    
-  }
+    this.environment.pushScope(ScopeIdentifier.S_BLOCK);
+
+    for (const stmnt of node.body) {
+      const value = stmnt.acceptEvalVisitor(this);
+
+      let state = this.dispatcher;
+
+      this.dispatcher = DispatchState.NONE;
+
+      if (state === DispatchState.RETURN) {
+        return value;
+      } else if (state === DispatchState.BREAK) {
+        break;
+      } else if (state === DispatchState.CONTINUE) {
+        continue;
+      };
+    };
+
+    this.environment.popScope();
+
+    return new RuntimeObjects.NullObject();
+  };
 };
 
 export default ASTEvaluator;

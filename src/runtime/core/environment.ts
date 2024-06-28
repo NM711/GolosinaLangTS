@@ -27,7 +27,8 @@ class Scope {
 
 class Environment {
   private scopes: Scope[];
-  public lastResolved: string;
+  public lastResolvedSymbol: string;
+  public lastResolvedModuleSymbol: string;
   public current: Scope;
   public strict: boolean;
      
@@ -87,7 +88,7 @@ class Environment {
       const scope = this.scopes[i];
       
       if (scope.symbols.has(symbol)) {
-        this.lastResolved = symbol;
+        this.lastResolvedSymbol = symbol;
         return scope.symbols.get(symbol) as RuntimeValues.AbstractValue;
       };
     };

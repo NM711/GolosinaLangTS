@@ -14,6 +14,8 @@ namespace VisitorTypes {
     public abstract visitWhileStmnt(node: SyntaxTree.WhileStatementNode): T;
     public abstract visitReturnStmnt(node: SyntaxTree.ReturnStatementNode): T;
     public abstract visitBlockStmnt(node: SyntaxTree.BlockStatementNode): T;
+    public abstract visitBreakStmnt(node: SyntaxTree.BreakStatementNode): T;
+    public abstract visitContinueStmnt(node: SyntaxTree.ContinueStatementNode): T;
     public abstract visitCaseStmnt(node: SyntaxTree.CaseStatementNode): T;
     public abstract visitMethodExpr(node: SyntaxTree.MethodExpressionNode): T;
     public abstract visitCallExpr(node: SyntaxTree.ExpressionCallNode): T;

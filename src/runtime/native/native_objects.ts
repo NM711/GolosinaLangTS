@@ -1,7 +1,6 @@
 import fs from "node:fs"
-import { ParamState, RuntimeObjects, RuntimeValues } from "../core/runtime_values";
+import { RuntimeObjects, RuntimeValues } from "../core/runtime_values";
 import RuntimeValueTypeGuard from "../../guards/runtime_value_guards";
-import GolosinaDataStructures from "./data_structures";
 
 namespace NativeModules {
 
@@ -28,7 +27,7 @@ namespace NativeModules {
           return {
             prototype: this.format(toLog.prototype),
             members,
-            value: toLog.value
+            value: toLog.primitive
           };
 
         } else {
@@ -45,10 +44,10 @@ namespace NativeModules {
     private writeObject(toLog: RuntimeValues.Object) {
       if (RuntimeValueTypeGuard.isObjectValue(toLog)) {
 
-        if (toLog.isContainer()) {
-          process.stdout.write(JSON.stringify(toLog.value, null, 2))
+        if (toLog instanceof RuntimeObjects.VectorObject) {
+          process.stdout.write(JSON.stringify(toLog.primitive, null, 2))
         } else {
-          process.stdout.write(`${toLog.value} `);
+          process.stdout.write(`${toLog.primitive} `);
         };
         
       } else {
@@ -67,7 +66,7 @@ namespace NativeModules {
         const date = new Date();
         console.log(`Date: ${date.getFullYear()}-${date.getMonth()}-${date.getDay()},`, `Time: ${date.getHours()}:${date.getMinutes()}:${date.getSeconds()}`);
       },
-        ParamState.ARRAY
+        RuntimeValues.ParamState.ARRAY
       ));
     };
 
@@ -79,7 +78,7 @@ namespace NativeModules {
 
         process.stdout.write("\n");
       },
-        ParamState.ARRAY
+        RuntimeValues.ParamState.ARRAY
       ));
     };
 
@@ -98,21 +97,21 @@ namespace NativeModules {
     };
 
     private addReadFile() {
-      this.object.members.set("readFile", new RuntimeValues.MethodNative((path: RuntimeObjects.StringObject, encoding: RuntimeObjects.StringObject) => {
-        return fs.readFileSync(path.value, encoding.value as BufferEncoding);
+      this.object.setMember("readFile", new RuntimeValues.MethodNative((path: RuntimeObjects.StringObject, encoding: RuntimeObjects.StringObject) => {
+        return fs.readFileSync(path.primitive, encoding.primitive as BufferEncoding);
       }
       ));
     };
 
     private addUpdateFilePath() {
-      this.object.members.set("updateFilePath", new RuntimeValues.MethodNative((oldPath: RuntimeObjects.StringObject, newPath: RuntimeObjects.StringObject) => {
-        fs.renameSync(oldPath.value, newPath.value);
+      this.object.setMember("updateFilePath", new RuntimeValues.MethodNative((oldPath: RuntimeObjects.StringObject, newPath: RuntimeObjects.StringObject) => {
+        fs.renameSync(oldPath.primitive, newPath.primitive);
       }))
     };
 
     private addReadDirectory() {
-      this.object.members.set("readDir", new RuntimeValues.MethodNative((path: RuntimeObjects.StringObject, encoding: RuntimeObjects.StringObject) => {
-        return fs.readdirSync(path.value, encoding.value as BufferEncoding);
+      this.object.setMember("readDir", new RuntimeValues.MethodNative((path: RuntimeObjects.StringObject, encoding: RuntimeObjects.StringObject) => {
+        return fs.readdirSync(path.primitive, encoding.primitive as BufferEncoding);
       }
       ));
     };
@@ -137,16 +136,16 @@ namespace NativeModules {
     };
 
     private addVector() {
-      this.object.members.set("vector", new RuntimeValues.MethodNative((elements: any[]) => {
-        const vec = new GolosinaDataStructures.Vector();
+      this.object.setMember("vector", new RuntimeValues.MethodNative((elements: any[]) => {
+        const vec = new RuntimeObjects.VectorObject();
 
         if (elements.length > 0) {
-          vec.setElements = elements;
+          vec.setElements(elements);
         };
 
-        return vec.retreive;
+        return vec;
       },
-        ParamState.ARRAY
+        RuntimeValues.ParamState.ARRAY
       ));
     };
 
@@ -155,8 +154,6 @@ namespace NativeModules {
       return this.object;
     };
   };
-
-
 };
 
 /**
@@ -164,15 +161,15 @@ namespace NativeModules {
 */
 
 class NativeObjects {
-  public get getFmt() {
+  public static get getFmt() {
     return new NativeModules.FMT().retrieve;
   };
 
-  public get getOS() {
+  public static get getOS() {
     return new NativeModules.OS().retreive;
   };
 
-  public get getContainers() {
+  public static get getContainers() {
     return new NativeModules.Containers().retrieve;
   };
 };

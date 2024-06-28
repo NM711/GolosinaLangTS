@@ -59,11 +59,28 @@ export namespace RuntimeValues {
 
   export class Module extends AbstractValue {
     public id: RuntimeValueID.RID_MODULE;
-    public block: SyntaxTree.BlockStatementNode;
+    private members: Map<string, AbstractValue>;
 
     constructor() {
       super();
       this.id = RuntimeValueID.RID_MODULE;
+      this.members = new Map();
+    };
+
+    public getMember(key: string): AbstractValue {
+      if (this.members.has(key)) {
+        return this.members.get(key) as AbstractValue;
+      };
+
+      throw new GolosinaExceptions.Backend.RuntimeError(`Could not get member "${key}" because it is undefined!`);
+    };
+
+    public get getMembers(): Iterable<[string, AbstractValue]> {
+      return this.members.entries();
+    };
+
+    public setMember(key: string, value: AbstractValue): void {
+      this.setMember(key, value);
     };
   };
 
@@ -100,18 +117,7 @@ export namespace RuntimeValues {
     };
 
     public setMember(key: string, value: AbstractValue): void {
-      let proto: Object | null = this;
-
-      while (proto !== null) {
-        if (proto.members.has(key)) {
-          proto.members.set(key, value);
-          return;
-        };
-
-        proto = proto.prototype;
-      };
-
-      throw new GolosinaExceptions.Backend.RuntimeError(`Could not set member "${key}" because it is undefined!`);
+      this.members.set(key, value);
     };
   };
 
@@ -131,6 +137,7 @@ export namespace RuntimeObjects {
     public typename: string;
     private dataType: DataType;
     public primitive: TypeValue;
+
     constructor(type: DataType, name: string) {
       super();
       this.dataType = type;
@@ -160,30 +167,44 @@ export namespace RuntimeObjects {
     public isNull(): this is NullObject {
       return this.dataType === DataType.T_NULL;
     };
-
-    public isContainer(): this is ContainerObject {
-      return this.dataType === DataType.T_OBJECT && this instanceof ContainerObject;
-    };
   };
 
   /*
     Non primitive value, can construct different datastructures with this.
   */
 
-  export class ContainerObject extends ValueObject {
-    // i get it doesnt make much sense to name this a primtiive but eh.
+  export class VectorObject extends ValueObject {
     public primitive: any[];
 
     constructor() {
-      super(DataType.T_OBJECT, "Container");
-      this.primitive  = [];
-      this.addUtil();
+      super(DataType.T_OBJECT, "Vector");
+      this.primitive = [];
+      this.init();
     };
 
-    private addUtil() {
+    private init() {
       this.setMember("length", new RuntimeValues.MethodNative(() => {
         return this.primitive.length;
-      }))
+      }));
+
+      this.setMember("push", new RuntimeValues.MethodNative((element: any) => {
+        this.primitive.push(element);
+      }
+      ));
+
+      this.setMember("pop", new RuntimeValues.MethodNative(() => {
+        return this.primitive.pop();
+      }
+      ));
+      
+      this.setMember("at", new RuntimeValues.MethodNative((index: RuntimeObjects.IntegerObject) => {
+        return this.primitive.at(index.primitive);
+      }
+      ));
+    };
+
+    public setElements(elements: any[]) {
+      this.primitive = elements;
     };
 
   };

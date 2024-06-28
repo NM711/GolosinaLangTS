@@ -209,10 +209,10 @@ class Lexer {
         break;
 
       default:
-        if (/[a-zA-Z_]/.test(this.look)) {
+        if (/[a-zA-Z_]/.test(this.look) && this.look !== undefined) {
           this.consume();
           charState = LexerState.S_IDENTIFIER;
-        } else if (/[0-9]/.test(this.look)) {
+        } else if (/[0-9]/.test(this.look) && this.look !== undefined) {
           this.consume();
           charState = LexerState.S_INT;
         } else {
@@ -224,21 +224,17 @@ class Lexer {
   };
 
   private reject(custom: string | null = null) {
-
     this.updateTokenInfoData(InfoUpdateType.END);
     if (!custom) {
-      this.message = `Unexpected character!`;
-      this.state = LexerState.S_REJECT;
+      throw new GolosinaExceptions.Frontend.TokenizerError("Unexpected character!", this.info);
     } else {
-      this.message = custom;
-      this.state = LexerState.S_C_REJECT;
+      throw new GolosinaExceptions.Frontend.TokenizerError(custom, this.info);
     };
   };
 
   public reset() {
     this.tokens = [];
     this.matching = "";
-    this.message = "";
     this.index = 0;
     this.state = LexerState.S_INITIAL;
     this.position = new LinePosition();
@@ -267,14 +263,6 @@ class Lexer {
 
           case LexerState.S_TERMINATE: {
             break;
-          };
-
-          case LexerState.S_REJECT: {
-            throw new GolosinaExceptions.Frontend.TokenizerError("Unexpected character!", this.info);
-          };
-
-          case LexerState.S_C_REJECT: {
-            throw new GolosinaExceptions.Frontend.TokenizerError(this.message, this.info);
           };
 
           case LexerState.S_COMMENT: {
