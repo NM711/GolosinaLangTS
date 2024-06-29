@@ -175,18 +175,14 @@ class Parser {
   };
 
   private parseMemberPrimary() {
-    const literal = this.parseLiteralExpr();
-
-    if (literal) {
-      return literal;
+    if (this.look.id === TokenIdentifiers.CASE) {
+      return this.parseCaseExpr();
     } else if (this.look.id === TokenIdentifiers.CLONE) {
       return this.parseCloneExpr();
     } else if (this.look.id === TokenIdentifiers.METHOD) {
       return this.parseMethodExpr();
-    } else if (this.look.id === TokenIdentifiers.IDENT) {
-      return new SyntaxTree.IdentfierNode(this.look.lexeme, this.look.info);
     } else {
-      throw new GolosinaExceptions.Frontend.SyntaxError(`Unexpected in member primary expression!`, this.look.info, ReporterMetaData.FilePath);
+      return this.parseExpr();
     };
   };
 
@@ -195,6 +191,8 @@ class Parser {
 
     if (literal) {
       return literal;
+    } else if (this.look.id === TokenIdentifiers.CASE) {
+      return this.parseCaseExpr();
     } else if (this.look.id === TokenIdentifiers.CLONE) {
       return this.parseCloneExpr();
     } else if (this.look.id === TokenIdentifiers.IDENT) {
@@ -238,6 +236,7 @@ class Parser {
   };
 
   private parseMethodExpr(): SyntaxTree.BaseNodeAST {
+    this.validator.state.inMethod = true;
     const expr = new SyntaxTree.MethodExpressionNode(this.look.info);
     this.eat();
 
@@ -254,11 +253,13 @@ class Parser {
       this.validator.expect.seperator(this.look);
       this.eat();
     };
-    
+
     this.validator.expect.rightParenthesis(this.look);
     this.eat();
 
     expr.block = this.parseBlockStmnt();
+
+    this.validator.state.inMethod = false;
     return expr;
   };
 
@@ -308,9 +309,9 @@ class Parser {
 
     this.validator.expect.rightParenthesis(this.look);
     this.eat();
-    
+
     lhs = expr;
-    
+
     return lhs;
   };
 
@@ -486,6 +487,7 @@ class Parser {
   };
 
   private parseReturnStmnt(): SyntaxTree.BaseNodeAST {
+    this.validator.validateReturn(this.look.info);
     const stmnt = new SyntaxTree.ReturnStatementNode(this.look.info);
     this.eat();
 
@@ -504,13 +506,14 @@ class Parser {
       this.validator.expect.semicolon(this.look);
       this.eat();
     };
-    
+
     this.validator.expect.rightCurly(this.look);
     this.eat();
     return stmnt;
   };
 
   private parseWhileStmnt(): SyntaxTree.BaseNodeAST {
+    this.validator.state.inLoop = true;
     const stmnt = new SyntaxTree.WhileStatementNode(this.look.info);
     this.eat();
 
@@ -523,11 +526,13 @@ class Parser {
     this.eat();
 
     stmnt.block = this.parseBlockStmnt();
-
+    this.validator.state.inLoop = false;
     return stmnt;
   };
 
   private parseForStmnt(): SyntaxTree.BaseNodeAST {
+    this.validator.state.inLoop = true;
+
     const stmnt = new SyntaxTree.ForStatementNode(this.look.info);
     this.eat();
 
@@ -551,12 +556,14 @@ class Parser {
 
 
     stmnt.block = this.parseBlockStmnt();
+    this.validator.state.inLoop = false;
 
     return stmnt;
   };
 
-  private parseCaseStmnt(): SyntaxTree.BaseNodeAST {
-    const stmnt = new SyntaxTree.CaseStatementNode(this.look.info);
+  private parseCaseExpr(): SyntaxTree.BaseNodeAST {
+    this.validator.state.inCase = true;
+    const stmnt = new SyntaxTree.CaseExpressionNode(this.look.info);
     this.eat();
 
     this.validator.expect.leftParenthesis(this.look);
@@ -573,7 +580,7 @@ class Parser {
     let defaultsCounted: number = 0;
 
     while (!this.helpers.isRightCurly(this.look)) {
-      const test = new SyntaxTree.CaseStatementTestNode(this.look.info);
+      const test = new SyntaxTree.CaseExpressionTestNode(this.look.info);
 
       this.validator.expect.test(this.look);
 
@@ -590,15 +597,17 @@ class Parser {
         test.block = this.parseBlockStmnt();
       };
 
-      stmnt.tests.push(test);
-    };
+      if (defaultsCounted > 1) {
+        throw new GolosinaExceptions.Frontend.SyntaxError(`Encountered more than one "default" in case expression!`, test.info, ReporterMetaData.FilePath);
+      };
 
-    if (this.look.id === TokenIdentifiers.DEFAULT && defaultsCounted > 1) {
-      throw new GolosinaExceptions.Frontend.SyntaxError(`Encountered more than one case "default"!`, stmnt.info, ReporterMetaData.FilePath);
+      stmnt.tests.push(test);
     };
 
     this.validator.expect.rightCurly(this.look);
     this.eat();
+
+    this.validator.state.inCase = false;
 
     return stmnt;
   };
@@ -616,7 +625,7 @@ class Parser {
     this.eat();
 
     stmnt.block = this.parseBlockStmnt();
-    
+
     if (this.helpers.isElse(this.look)) {
       this.eat();
       stmnt.alternate = (this.helpers.isIf(this.look)) ? this.parseIfStmnt() : this.parseBlockStmnt();
@@ -640,7 +649,7 @@ class Parser {
     if (!this.helpers.isSemicolon(this.look)) {
       this.validator.expect.token(TokenIdentifiers.EQUAL_SYMB, "=", this.look);
       this.eat();
-      stmnt.init = this.validator.validateVarInit(this.parseExpr());
+      stmnt.init = this.parseExpr();
     };
 
     this.validator.validateConstant(stmnt);
@@ -699,8 +708,6 @@ class Parser {
         return this.parseVarDecStmnt();
       case TokenIdentifiers.IF:
         return this.parseIfStmnt();
-      case TokenIdentifiers.CASE:
-        return this.parseCaseStmnt();
       case TokenIdentifiers.FOR:
         return this.parseForStmnt();
       case TokenIdentifiers.WHILE:
@@ -766,7 +773,6 @@ class Parser {
         this.eat();
         this.synchronize();
         this.track.setOffset(this.look.info.offset.end, "END");
-
         if (e instanceof GolosinaExceptions.Frontend.SyntaxError) {
           // console.log(e.message)
           // // !console.error(e)

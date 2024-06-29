@@ -74,6 +74,8 @@ class ASTEvaluator extends VisitorTypes.AbstractVisitor<RuntimeValues.AbstractVa
   private inject() {
     this.environment.declare("Object", new RuntimeValues.Object());
     this.environment.declare("fmt", NativeObjects.getFmt);
+    this.environment.declare("os", NativeObjects.getOS);
+    this.environment.declare("containers", NativeObjects.getContainers);
   };
 
   public override visitBinaryExpr(node: SyntaxTree.BinaryExpressionNode): RuntimeValues.AbstractValue {
@@ -339,13 +341,15 @@ class ASTEvaluator extends VisitorTypes.AbstractVisitor<RuntimeValues.AbstractVa
     } else {
 
       this.tc.checkArgLengthMatch(node.arguments.length, golosinaMethod.params.length)
-
       this.environment.pushScope(ScopeIdentifier.S_METHOD);
 
+      
+      
       if (this.context) {
         this.environment.declare("this", this.context);
       };
-      
+
+      console.log(this.environment.current.symbols) 
 
       // inject arguments locally.
 
@@ -357,7 +361,7 @@ class ASTEvaluator extends VisitorTypes.AbstractVisitor<RuntimeValues.AbstractVa
       };
 
       const returnedFromBlock = golosinaMethod.block.acceptEvalVisitor(this);
-
+      
       this.environment.popScope();
       this.context = null;
       return returnedFromBlock;
@@ -470,6 +474,44 @@ class ASTEvaluator extends VisitorTypes.AbstractVisitor<RuntimeValues.AbstractVa
     this.environment.popScope();
 
     return new RuntimeObjects.NullObject();
+  };
+
+  public override visitCaseExpr(node: SyntaxTree.CaseExpressionNode): RuntimeValues.AbstractValue {
+    const discriminant = node.discriminant.acceptEvalVisitor(this);
+
+    if (!discriminant || !RuntimeValueTypeGuard.isObjectValue(discriminant)) {
+      throw new GolosinaExceptions.Backend.RuntimeError(`Case discriminant appears to be undefined!`);
+    };
+
+    let value: RuntimeValues.AbstractValue = new RuntimeObjects.NullObject();
+    
+    for (const test of node.tests) {
+
+      if (!test.isDefault && test.condition) {
+        const expr = test.condition.acceptEvalVisitor(this);
+
+        if (!expr || !RuntimeValueTypeGuard.isObjectValue(expr)) {
+          throw new GolosinaExceptions.Backend.RuntimeError(`Case test appears to be undefined!`);
+        };
+
+        if (expr.primitive === discriminant.primitive) {
+          value = test.block.acceptEvalVisitor(this);
+          break;
+        };
+        
+      } else {
+        value = test.block.acceptEvalVisitor(this);
+      };
+
+      let state = this.dispatcher;
+      this.dispatcher = DispatchState.NONE;
+      
+      if (state === DispatchState.BREAK) {
+        break;
+      };
+    };
+
+    return value;
   };
 };
 

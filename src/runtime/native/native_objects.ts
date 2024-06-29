@@ -136,7 +136,8 @@ namespace NativeModules {
     };
 
     private addVector() {
-      this.object.setMember("vector", new RuntimeValues.MethodNative((elements: any[]) => {
+
+      this.object.setMember("vector", new RuntimeValues.MethodNative((...elements: any[]) => {
         const vec = new RuntimeObjects.VectorObject();
 
         if (elements.length > 0) {

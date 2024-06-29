@@ -81,9 +81,10 @@ The reason I went for the prototype design was for a few main reasons:
   };
 ```
 
-### Case Statements
+### Case Statement Expressions
 
-Similar to nim case statements can be standalone statements or can also act as expressions.
+Similar to languages like Nim, cases can be used as standalone statements or expressions. Ultimately whatever you choose to do,
+the expression will have to return something, and if there is no specified return it will implicitly return Null.
 
 ```
   case (y) {
@@ -100,8 +101,6 @@ Similar to nim case statements can be standalone statements or can also act as e
     }
   };
 ```
-
-**Note:** This feature is still under development.
 
 ```
   y = case (y) {
@@ -205,6 +204,9 @@ the interpreter will throw an error mentioning the fact that the member you are 
   fmt->print(inheritFromMyObj->x);
 ```
 
+### Example/Test Programs
+
+For example/test programs, you can go to this repositories [test](https://github.com/NM711/GolosinaLangTS/tree/master/test) file.
 
 ## Running
 
@@ -238,7 +240,11 @@ You can run golosina by doing the following
 
 #### Flags
 
-`````
+```
   --dump-ast    # This will print the AST in JSON format
   --dump-tokens # This will print the tokens also in JSON format
 ```
+
+## TODO
+
+* Module System

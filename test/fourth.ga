@@ -1,0 +1,33 @@
+module main;
+
+const GetRandomNumber = clone Object {
+	myVector = containers->vector(10, 3, 4),
+	generate = method () {
+		fmt->log("Current Vector Elements: ", this->myVector);
+		return this->myVector->random();	
+	}
+};
+
+const Selector = clone Object {
+	execute = method () {
+		const message = case (GetRandomNumber->generate()) {
+			of 10 {
+				return "We reached 10!";				
+			}
+
+			of 3 {
+				return "We reached 3!";
+			}
+
+			default {
+				return "We reached default!";
+			}
+		};
+
+		const hello = "hello world";
+
+		fmt->log("Returned message: ", message);
+	}
+};
+
+Selector->execute();

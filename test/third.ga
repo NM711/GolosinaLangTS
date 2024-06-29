@@ -1,3 +1,4 @@
+module main;
 # Expression Examples
 
 const x = clone Object {
@@ -38,29 +39,14 @@ const operation = clone Object {
 	}
 };
 
-# const result = operation->loop();
-
-# fmt->log("Loop Result: ", result);
-
 operation->populate();
 
-fmt->log(operation->vec1);
+# Inheritance, This is Very Gaymer
+# As a personal note, I dont really like how some native objects are created implicitly under the hood, such as vector.
+# For example when you call containers->vector, "create" is called under the hood. Might not do that, depends on how I feel
+# WUAHAHAHAHAHAHAHA
 
-# const greet = "Hallo";
+const inherited = clone operation {};
 
-# case (greet) {
-#	of "hi" {
-#		fmt->log("is in hi!");
-#		break;
-#	}
-#
-#	of "hello" {
-#		fmt->log("is in hello");
-#		break;
-#	}
-#	
-#	default {
-#		fmt->log("Is Default Test!");
-#		return 10;
-#	}
-# };
+fmt->log("INHERITED WUAUAUAUA: ", inherited->vec1);
+fmt->log("BASE OBJECT: ", operation->vec1);

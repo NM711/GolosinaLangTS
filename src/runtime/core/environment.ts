@@ -1,4 +1,5 @@
 import GolosinaExceptions from "../../errors/exceptions";
+import RuntimeValueTypeGuard from "../../guards/runtime_value_guards";
 import { RuntimeValues } from "./runtime_values";
 
 export enum ScopeIdentifier {
@@ -30,12 +31,10 @@ class Environment {
   public lastResolvedSymbol: string;
   public lastResolvedModuleSymbol: string;
   public current: Scope;
-  public strict: boolean;
      
   constructor() {
     this.scopes = [new Scope(ScopeIdentifier.S_GLOBAL)];
     this.current = this.scopes[0];
-    this.strict = true;
   };
   
   private updateCurrent(): void {

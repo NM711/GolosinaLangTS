@@ -88,15 +88,17 @@ class Expect {
   };
 };
 
+/**
+  Parser state in order to detect out of place statements.
+*/
+
 class State {
-  public inObj: boolean;
   public inLoop: boolean;
   public inCase: boolean;
   public inMethod: boolean;
   constructor() {
     this.inCase = false;
     this.inLoop = false;
-    this.inObj = false;
     this.inMethod = false;
   };
 };
@@ -146,20 +148,10 @@ class SemanticValidator {
     return node;
   };
 
-  public validateVarInit(node: SyntaxTree.BaseNodeAST): SyntaxTree.BaseNodeAST {
-    if (this.isInvalidNode(node)) {
-      throw new GolosinaExceptions.Frontend.SyntaxError(`Unexpected value within a variable initializer!`, node.info, ReporterMetaData.FilePath)
-    };
-
-    return node;
-  };
-
-  public validateReturn(node: SyntaxTree.BaseNodeAST) {
+  public validateReturn(info: TokenInformation) {
     if (!this.state.inMethod) {
-      throw new GolosinaExceptions.Frontend.SyntaxError(`Encountered an unexpected "return" statement outside of a method body!`, node.info, ReporterMetaData.FilePath);
+      throw new GolosinaExceptions.Frontend.SyntaxError(`Encountered an unexpected "return" statement outside of a method body!`, info, ReporterMetaData.FilePath);
     };
-
-    return node;
   };
 
   public validateCloningInCloneExpr(node: SyntaxTree.BaseNodeAST) {
@@ -198,12 +190,6 @@ class SemanticValidator {
   public validateContinue(info: TokenInformation) {
     if (!this.state.inLoop) {
       throw new GolosinaExceptions.Frontend.SyntaxError(`Encountered an unexpected "continue" statement oustide of a loop!`, info, ReporterMetaData.FilePath);
-    };
-  };
-
-  public validateMethod(info: TokenInformation) {
-    if (!this.state.inObj) {
-      throw new GolosinaExceptions.Frontend.SyntaxError(`Encountered a "method" expression outside of an object!`, info, ReporterMetaData.FilePath);
     };
   };
 };

@@ -201,6 +201,10 @@ export namespace RuntimeObjects {
         return this.primitive.at(index.primitive);
       }
       ));
+
+      this.setMember("random", new RuntimeValues.MethodNative(() => {
+        return this.primitive[Math.floor(Math.random() * this.primitive.length)];
+      }));
     };
 
     public setElements(elements: any[]) {

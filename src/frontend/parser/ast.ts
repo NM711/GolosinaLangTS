@@ -35,7 +35,7 @@ export enum NodeIdentifiers {
   N_FOR_STMNT,
   N_WHILE_STMNT,
   N_CASE_TEST,
-  N_CASE_STMNT,
+  N_CASE_EXPR,
   N_RETURN_STMNT,
   N_CLONE_EXPR,
   N_BREAK_STMNT,
@@ -348,7 +348,7 @@ export namespace SyntaxTree {
     };
   };
 
-  export class CaseStatementTestNode extends BaseNodeAST {
+  export class CaseExpressionTestNode extends BaseNodeAST {
     public isDefault: boolean;
     public condition: BaseNodeAST | null;
     public block: BaseNodeAST;
@@ -362,17 +362,17 @@ export namespace SyntaxTree {
     public override acceptEvalVisitor(visitor: VisitorTypes.TEvaluatorVisitor): RuntimeValues.AbstractValue { };
   };
 
-  export class CaseStatementNode extends BaseNodeAST {
+  export class CaseExpressionNode extends BaseNodeAST {
     public discriminant: BaseNodeAST;
-    public tests: CaseStatementTestNode[];
+    public tests: CaseExpressionTestNode[];
 
     constructor(info: TokenInformation) {
-      super(NodeIdentifiers.N_CASE_STMNT, "CaseStatement", info);
+      super(NodeIdentifiers.N_CASE_EXPR, "CaseExpression", info);
       this.tests = [];
     };
     
     public override acceptEvalVisitor(visitor: VisitorTypes.TEvaluatorVisitor): RuntimeValues.AbstractValue {
-      return visitor.visitCaseStmnt(this);
+      return visitor.visitCaseExpr(this);
     };
   };
 

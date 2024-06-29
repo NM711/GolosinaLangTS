@@ -12,7 +12,6 @@ class Lexer {
   private info: TokenInformation;
   private position: LinePosition;
   private state: LexerState;
-  private message: string;
 
   constructor() {
     this.reset();
@@ -296,7 +295,7 @@ class Lexer {
           };
 
           case LexerState.S_IDENTIFIER: {
-            if (/[a-zA-Z_]/.test(this.look) && this.look !== undefined) {
+            if ((/[a-zA-Z_]/.test(this.look) || /[0-9]/.test(this.look)) && this.look !== undefined) {
               this.consume();
             } else if (this.table.has(this.matching)) {
               this.pushToken(this.table.get(this.matching) as TokenIdentifiers);

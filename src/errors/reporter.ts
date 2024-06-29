@@ -25,24 +25,32 @@ class ErrorReporter {
 
   private static LogLineInfo(info: TokenInformation, path: string) {
     this.UpdateReporter(path);
-
     process.stdout.write(styleText("gray", `${info.position.start.line} | `));
 
-    for (let i = info.offset.start; i <= info.offset.end; ++i) {
-      process.stdout.write(ReporterMetaData.Input[i]);
+    if (ReporterMetaData.Input[info.offset.start] === undefined || ReporterMetaData.Input[info.offset.end] === undefined) {
+      process.stdout.write("EOF");
+      process.stdout.write("\n");
+      this.LinePadding(info);
+      process.stdout.write(styleText("red", "^").repeat(3));
+      process.stdout.write("\n\n");
+      this.LinePadding(info);
+    } else {
+      for (let i = info.offset.start; i <= info.offset.end; ++i) {
+        process.stdout.write(ReporterMetaData.Input[i]);
+      };
+
+      process.stdout.write("\n");
+
+      this.LinePadding(info);
+
+      for (let i = info.offset.start; i <= info.offset.end; ++i) {
+        process.stdout.write(styleText("red", "^").repeat(1));
+      };
+
+      process.stdout.write("\n\n");
+
+      this.LinePadding(info);
     };
-
-    process.stdout.write("\n");
-
-    this.LinePadding(info);
-
-    for (let i = info.offset.start; i <= info.offset.end; ++i) {
-      process.stdout.write(styleText("red", "^").repeat(1));
-    };
-
-    process.stdout.write("\n\n");
-
-    this.LinePadding(info);
   };
 
   private static LogMessage(error: GolosinaExceptions.Frontend.SyntaxError | GolosinaExceptions.Frontend.TokenizerError) {
