@@ -1,8 +1,5 @@
 # GolosinaLang
 
-
-*Undergoing rewrite, if for some reason the interpreter is not working revert back to commit "921c0309edaf965e730f60dca4a0d491c0907a51"*
-
 #### NOTE:
 This is the closest thing I will make to an official specification for the time being.
 This is not meant to be a super in-depth writeup. Rather something that aims to be practical in order to grasp the basics of the language and its
@@ -29,18 +26,23 @@ There is still a long road ahead but I have been steadily working on both.
 
 ## What is a prototype oriented language?
 
-A prototye oriented language is a programming language, that aims to achieve Object Oriented Programming through the **Prototype** rather than the class.
-The class is simply a blueprint for an object, a prototype is simply an object that is a parent to a derived object. The main takeway is that prototypes
-thrive at runtime, and classes do not.
+A prototye oriented or prototype based language is a programming language that aims to achieve object Oriented Programming through the **Prototype** rather than the traditional class.
+In many languages classes exist to be *blueprints* or *factories* of a to be *instance* of an object. In prototype oriented
+languages this concept of segregation between a "blueprint" and "instance" does not exist, rather the only thing that exists at runtime is the instance.
+For those who like classes though, like in any prototype oriented language there is ways to mimic class behaviour, which I will attempt to detail below.
 
-## Why is Golosina prototype based rather than class based like traditional languages like java?
+## Why is Golosina prototype oriented rather than class oriented like traditional languages like java?
 
-One reason which is selfish is due to the ease and simplicity of the actual implementation of the prototype/prototype chain within the
-interpreter. Another reason which may actually be valid for the end user is that, prototype based languages are extremely powerful in the sense
-that you can create an entire class based system if the user wishes to (look at javascript and its class syntatic sugar), and if they dont they can
-use a language that is OOP that introduces less concepts. A perfect language for beginners I dare say, if I was a new programmer or a person
-who simply writes small scripts for automation, prototype based languages may be suitable to provide a gentle introduction to programming and the basics of OOP.
-In traditional languages like Java, you may find more constructs that may be confusing for beginners.
+One reason which is selfish is due to the ease and simplicity of the actual implementation of the prototype system within the
+interpreter. Another reason which may actually be valid for the end user is that, prototype oriented languages are extremely powerful in the sense
+that, anything you can do in a class oriented system can be done with prototypes alone. In later versions it could even be possible to implement
+class based syntatic sugar based on the prototype system under the hood (look at javascript and its class syntatic sugar).
+
+Golsoina being prototype oriented is a language that is ultimately still object oriented which introduces fewer concepts,
+this makes it a perfect language for beginners and experts alike, who wish to quickly write scripts.
+It is also suitable as an introductory language, for its simplicity and ability to
+gently introduce new users to the basics of programming and the object oriented paradigm, this may be more challenging to do
+as easily in more traditional object oriented languages due to the amount of constructs these languages have.
 
 # Examples
 
