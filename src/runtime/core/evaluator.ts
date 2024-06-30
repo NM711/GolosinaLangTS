@@ -17,24 +17,71 @@ enum DispatchState {
   RETURN,
 };
 
+/**
+  Context stack, used to keep track of the context of the currently called method while not losing the context of the previous
+  ones once complete.
+*/
+
+class Context {
+  private stack: RuntimeValues.Object[];
+  public updateContext: boolean;
+
+  constructor() {
+    this.stack = [];
+    this.updateContext = false;
+  };
+
+  public get getAll() {
+    return this.stack;
+  };
+  public get get() {
+    return this.stack.pop();
+  };
+
+  public push(ctx: RuntimeValues.Object) {
+    this.stack.push(ctx);
+  };
+};
+
+/**
+  Managers the dispatcher state.
+*/
+
+class DispatchManager {
+  public state: DispatchState;
+
+  constructor() {
+    this.reset();
+  };
+
+  private reset() {
+    this.state = DispatchState.NONE;
+  }
+
+  public set(state: DispatchState) {
+    this.state = state;
+  };
+
+  public get get() {
+    let state = this.state;
+    this.reset();
+    return state;
+  };
+};
+
+
 class ASTEvaluator extends VisitorTypes.AbstractVisitor<RuntimeValues.AbstractValue> {
   private environment: Environment;
   private tc: GolosinaTypeChecker;
-  private dispatcher: DispatchState;
+  private dispatcher: DispatchManager;
+  public context: Context;
 
-  /**
-    Context of the last accessed Golosina Object. Necessary for "this" injection into scope during
-    expression call evaluation.
-  */
-  
-  private context: RuntimeValues.Object | null;
-  
   constructor() {
     super();
     this.environment = new Environment();
     this.tc = new GolosinaTypeChecker();
-    this.dispatcher = DispatchState.NONE;
-    this.context = null;
+    this.dispatcher = new DispatchManager();
+    this.context = new Context();
     this.inject();
   };
 
@@ -245,7 +292,6 @@ class ASTEvaluator extends VisitorTypes.AbstractVisitor<RuntimeValues.AbstractVa
 
   public override visitIdentExpr(node: SyntaxTree.IdentfierNode): RuntimeValues.AbstractValue {
     const resolved = this.environment.resolve(node.name);
-
     if (RuntimeValueTypeGuard.isVariable(resolved)) {
       return resolved.value;
     } else {
@@ -291,7 +337,6 @@ class ASTEvaluator extends VisitorTypes.AbstractVisitor<RuntimeValues.AbstractVa
   public override visitVarDecStmnt(node: SyntaxTree.VariableDeclarationStatementNode): RuntimeValues.AbstractValue {
     const variable = new RuntimeValues.Variable();
     variable.isConst = node.isConst;
-
     if (node.init) {
       const evaluated = this.tc.checkObject(node.init.acceptEvalVisitor(this));
       variable.value = evaluated;
@@ -300,6 +345,7 @@ class ASTEvaluator extends VisitorTypes.AbstractVisitor<RuntimeValues.AbstractVa
     };
 
     this.environment.declare(node.ident.name, variable);
+    
     return variable.value;
   };
 
@@ -311,14 +357,22 @@ class ASTEvaluator extends VisitorTypes.AbstractVisitor<RuntimeValues.AbstractVa
   public override visitMemberExpr(node: SyntaxTree.MemberExpressionNode): RuntimeValues.AbstractValue {
     const resolved = node.parent.acceptEvalVisitor(this);
     const golosinaObject = this.tc.checkObject(resolved);
-    this.context = golosinaObject;
+    const accessed = golosinaObject.getMember(node.accessing.name);
+    
+    if (this.context.updateContext && !RuntimeValueTypeGuard.isNativeMethod(accessed)) {
+      this.context.push(golosinaObject);
+    };
+
     return golosinaObject.getMember(node.accessing.name);
-  }
+  };
 
   public override visitCallExpr(node: SyntaxTree.ExpressionCallNode): RuntimeValues.AbstractValue {
-    const resolved = node.callee.acceptEvalVisitor(this);
-    const golosinaMethod = this.tc.checkMethod(resolved);
     
+    this.context.updateContext = true;
+    const resolved = node.callee.acceptEvalVisitor(this);
+    this.context.updateContext = false;
+    const golosinaMethod = this.tc.checkMethod(resolved);
+
     if (RuntimeValueTypeGuard.isNativeMethod(golosinaMethod)) {
 
       if (golosinaMethod.paramState === RuntimeValues.ParamState.FIXED) {
@@ -335,21 +389,17 @@ class ASTEvaluator extends VisitorTypes.AbstractVisitor<RuntimeValues.AbstractVa
       const v8Primitve = golosinaMethod.exec(...runtimeArguments);
 
       // we need to convert v8 pritimitves into actual golosina objects.
-
       return this.conversion(v8Primitve);
 
     } else {
-
       this.tc.checkArgLengthMatch(node.arguments.length, golosinaMethod.params.length)
       this.environment.pushScope(ScopeIdentifier.S_METHOD);
 
-      
-      
-      if (this.context) {
-        this.environment.declare("this", this.context);
-      };
+      const ctx = this.context.get;
 
-      console.log(this.environment.current.symbols) 
+      if (ctx) {
+        this.environment.declare("this", ctx);
+      };
 
       // inject arguments locally.
 
@@ -361,25 +411,24 @@ class ASTEvaluator extends VisitorTypes.AbstractVisitor<RuntimeValues.AbstractVa
       };
 
       const returnedFromBlock = golosinaMethod.block.acceptEvalVisitor(this);
-      
       this.environment.popScope();
-      this.context = null;
+
       return returnedFromBlock;
     };
   };
 
   public override visitReturnStmnt(node: SyntaxTree.ReturnStatementNode): RuntimeValues.AbstractValue {
-    this.dispatcher = DispatchState.RETURN;
+    this.dispatcher.set(DispatchState.RETURN);
     return node.expr.acceptEvalVisitor(this);
   };
-  
+
   public override visitBreakStmnt(node: SyntaxTree.BreakStatementNode): RuntimeValues.AbstractValue {
-    this.dispatcher = DispatchState.BREAK;
+    this.dispatcher.set(DispatchState.BREAK);
     return new RuntimeObjects.NullObject();
   };
 
   public override visitContinueStmnt(node: SyntaxTree.ContinueStatementNode): RuntimeValues.AbstractValue {
-    this.dispatcher = DispatchState.CONTINUE;
+    this.dispatcher.set(DispatchState.CONTINUE);
     return new RuntimeObjects.NullObject();
   };
 
@@ -400,33 +449,35 @@ class ASTEvaluator extends VisitorTypes.AbstractVisitor<RuntimeValues.AbstractVa
 
     node.init.acceptEvalVisitor(this);
 
+    let value: RuntimeValues.AbstractValue = new RuntimeObjects.NullObject(); 
+    
     while (true) {
       const expr = node.condition.acceptEvalVisitor(this);
       if (!expr || (RuntimeValueTypeGuard.isObjectValue(expr) && expr && !expr.primitive)) {
         break;
       };
 
-      const value = node.block.acceptEvalVisitor(this);
+      value = node.block.acceptEvalVisitor(this);
 
-      let state = this.dispatcher;
-      this.dispatcher = DispatchState.NONE;
+      const state = this.dispatcher.get;
 
-      if (state === DispatchState.RETURN) {
-        return value;
-      } else if (state === DispatchState.BREAK) {
+      if (state === DispatchState.RETURN ||state === DispatchState.BREAK) {
         break;
-      } else if (state === DispatchState.CONTINUE) {
-        node.update.acceptEvalVisitor(this);
-        continue;
       } else {
         node.update.acceptEvalVisitor(this);
       };
     };
 
-    return new RuntimeObjects.NullObject();
+    this.environment.popScope();
+
+    return value;
   };
 
   public override visitWhileStmnt(node: SyntaxTree.WhileStatementNode): RuntimeValues.AbstractValue {
+    this.environment.pushScope(ScopeIdentifier.S_LOOP);
+
+    let value: RuntimeValues.AbstractValue = new RuntimeObjects.NullObject();
+    
     while (true) {
       const expr = node.condition.acceptEvalVisitor(this);
 
@@ -434,46 +485,36 @@ class ASTEvaluator extends VisitorTypes.AbstractVisitor<RuntimeValues.AbstractVa
         break;
       };
 
-      const value = node.block.acceptEvalVisitor(this);
+      value = node.block.acceptEvalVisitor(this);
 
-      let state = this.dispatcher;
-      this.dispatcher = DispatchState.NONE;
-
-
-      if (state === DispatchState.RETURN) {
-        return value;
-      } else if (state === DispatchState.BREAK) {
+      const state = this.dispatcher.get;
+      
+      if (state === DispatchState.RETURN || state === DispatchState.BREAK) {
         break;
-      } else if (state === DispatchState.CONTINUE) {
-        continue;
-      };
-    };
-
-    return new RuntimeObjects.NullObject();
-  };
-
-  public override visitBlockStmnt(node: SyntaxTree.BlockStatementNode): RuntimeValues.AbstractValue {
-    this.environment.pushScope(ScopeIdentifier.S_BLOCK);
-
-    for (const stmnt of node.body) {
-      const value = stmnt.acceptEvalVisitor(this);
-
-      let state = this.dispatcher;
-
-      this.dispatcher = DispatchState.NONE;
-
-      if (state === DispatchState.RETURN) {
-        return value;
-      } else if (state === DispatchState.BREAK) {
-        break;
-      } else if (state === DispatchState.CONTINUE) {
-        continue;
       };
     };
 
     this.environment.popScope();
 
-    return new RuntimeObjects.NullObject();
+    return value;
+  };
+
+  public override visitBlockStmnt(node: SyntaxTree.BlockStatementNode): RuntimeValues.AbstractValue {
+    this.environment.pushScope(ScopeIdentifier.S_BLOCK);
+
+    let value: RuntimeValues.AbstractValue = new RuntimeObjects.NullObject();
+    
+    for (const stmnt of node.body) {
+      value = stmnt.acceptEvalVisitor(this);
+      const state = this.dispatcher.get;
+      
+      if (state === DispatchState.RETURN || state === DispatchState.BREAK) {
+        break;
+      };
+    };
+
+    this.environment.popScope();
+    return value;
   };
 
   public override visitCaseExpr(node: SyntaxTree.CaseExpressionNode): RuntimeValues.AbstractValue {
@@ -484,7 +525,7 @@ class ASTEvaluator extends VisitorTypes.AbstractVisitor<RuntimeValues.AbstractVa
     };
 
     let value: RuntimeValues.AbstractValue = new RuntimeObjects.NullObject();
-    
+
     for (const test of node.tests) {
 
       if (!test.isDefault && test.condition) {
@@ -498,15 +539,14 @@ class ASTEvaluator extends VisitorTypes.AbstractVisitor<RuntimeValues.AbstractVa
           value = test.block.acceptEvalVisitor(this);
           break;
         };
-        
+
       } else {
         value = test.block.acceptEvalVisitor(this);
       };
 
-      let state = this.dispatcher;
-      this.dispatcher = DispatchState.NONE;
-      
-      if (state === DispatchState.BREAK) {
+      const state = this.dispatcher.get;
+
+      if (state === DispatchState.RETURN || state === DispatchState.BREAK) {
         break;
       };
     };

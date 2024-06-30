@@ -25,13 +25,20 @@ const DirectoryCleaner = clone Object {
 			};
 			const fileExtension = fileSplit->pop();
 			const from = this->utils->concatFile(base, file);
-			# const to = this->utils->concatFile(destination, file);
-			#if (fileExtension == extension) {
-		#		os->updateFilePath(from, to);
-		#		fmt->log("Successfully moved: ", file, " to ", destination, "!");
-		#	};
+			const to = this->utils->concatFile(destination, file);
+			if (fileExtension == extension) {
+				os->updateFilePath(from, to);
+				fmt->log("Successfully moved: ", file, " to ", destination, "!");
+			};
 		};
+	},
+
+	helper = method() {
+		return this->utils->concatFile("Hello", "World");
 	}
 };
 
 DirectoryCleaner->cleanseFiles("/home/nathan/Downloads", "/home/nathan/Documents/PDF", "pdf");
+
+const greet = DirectoryCleaner->helper();
+fmt->print(greet);
