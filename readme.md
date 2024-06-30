@@ -36,7 +36,7 @@ thrive at runtime, and classes do not.
 The reason I went for the prototype design was for a few main reasons:
 
 1. A prototype design is easy to build within the interpreter.
-2. A prottoype design is extremely powerful and flexible, you can create an entire class system with private, public fields if the user felt like it. (take a look at JS, there is a whole bunch of syntatic sugar built around its prototype design).
+2. A protoype design is extremely powerful and flexible, you can create an entire class system with private, public fields if the user felt like it. (take a look at JS, there is a whole bunch of syntatic sugar built around its prototype design).
 3. A prototype design is fundamentally simpler than a class based design, this is particularly due to the concepts introduces within both.
   In a prototypal language all you need to know is what an object is and the 4 basic principles of oop and how to implement some object composition. 
   In a class based language you need to be introduced to many concepts like:
@@ -62,11 +62,13 @@ The reason I went for the prototype design was for a few main reasons:
 ### Variables
 
 ```
+  # Constants
+  
   const x = "Hello World";
-```
 
-```
-  const y = "Hi";
+  # Mutable Variables
+  
+  let y = "Hi";
 ```
 
 ### If Statements
