@@ -17,7 +17,6 @@ const DirectoryCleaner = clone Object {
 		
 		for (let i = 0; i < dirData->length(); ++i) {
 			const file = dirData->at(i);
-
 			const fileSplit = file->split(".");
 			
 			if (fileSplit->length() < 1) {

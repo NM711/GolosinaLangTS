@@ -50,6 +50,7 @@ export enum NodeIdentifiers {
   N_DATA_TYPE,
   N_BLOCK_STMNT,
   N_ACCESSING,
+  N_SHELL_EXPR
 };
 
 export namespace SyntaxTree {
@@ -376,5 +377,17 @@ export namespace SyntaxTree {
     };
   };
 
+
+  export class ShellExpressionNode extends BaseNodeAST {
+    public exec: string;
+    constructor(info: TokenInformation) {
+      super(NodeIdentifiers.N_SHELL_EXPR, "ShellExpression", info);  
+    };
+
+    public override acceptEvalVisitor(visitor: VisitorTypes.TEvaluatorVisitor): RuntimeValues.AbstractValue {
+      return visitor.visitShellExpr(this);  
+    };
+  };
+  
   export type Program = BaseNodeAST[];
 };

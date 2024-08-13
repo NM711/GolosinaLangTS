@@ -5,13 +5,12 @@ This is the closest thing I will make to an official specification for the time 
 This is not meant to be a super in-depth writeup. Rather something that aims to be practical in order to grasp the basics of the language and its
 design.
 
-
 ## What is Golosina?
 
 **Golosina is a dynamically typed, prototype oriented language meant to be fun to use, easy to read, and simple to learn.**
 
 As someone who tinkers on his machine a lot, I have found myself in situtations where I feel a sense of dread when it comes to writing shell code for automation.
-Golosina was made to hopefully fill that feeling as well, the language has support for direct shell embedding if necessary and in the future I plant to implement
+Golosina was made to hopefully fill that feeling as well, the language will have support for direct shell embedding and in the future I plan to implement
 some sort of concurrency model.
 
 Golosina took a lot of insipiration from languages like IO, Javascript, lua, and ruby. IO and JS for its prototype design model (IO is also easy to read),
@@ -207,7 +206,6 @@ For example/test programs, you can go to this repositories [test](https://github
 
 You can run golosina by doing the following
 
-
 ```
   git clone https://github.com/NM711/GolosinaLangTS.git
 ```
@@ -243,3 +241,9 @@ You can run golosina by doing the following
 ## TODO
 
 * Module System
+* Shell Embedding
+* Updating to the latest grammar
+* Extending the stdlib
+* BETTER ERRORS
+
+**As of August 2024 Development on the VM will be prioritized**

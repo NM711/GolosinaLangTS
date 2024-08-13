@@ -201,7 +201,10 @@ class Lexer {
         this.consume();
         this.pushToken(TokenIdentifiers.SEMICOLON_SYMB);
         break;
-
+      case ":":
+        this.consume();
+        this.pushToken(TokenIdentifiers.COLON_SYMB);
+        break;
       case ',':
         this.consume();
         this.pushToken(TokenIdentifiers.COMMA_SYMB);
@@ -488,13 +491,28 @@ class Lexer {
 
           case LexerState.S_DOLLAR: {
             switch (this.look) {
-              case "<":
+              case ":":
                 this.consume();
-                this.pushToken(TokenIdentifiers.DOLLAR_LEFT_ANGLE_BRACKET_SYMB);
-                break;
+                this.pushToken(TokenIdentifiers.COLON_SYMB);
+                ;
+                this.state = LexerState.S_SHELL;
+                break
 
               default:
                 this.reject();
+            };
+            break;
+          };
+
+          case LexerState.S_SHELL: {
+            switch (this.look) {
+              case ";":
+                this.consume();
+                this.pushToken(TokenIdentifiers.SHELL_LITERAL);
+              break;
+
+              default:
+                this.consume();
             };
             break;
           };

@@ -23,7 +23,8 @@ export enum LexerState {
   S_LEFT_ANGLE,
   S_RIGHT_ANGLE,
   S_AMPERSAND,
-  S_PIPE
+  S_PIPE,
+  S_SHELL
 };
 
 export enum TokenIdentifiers {
@@ -54,9 +55,9 @@ export enum TokenIdentifiers {
   INTEGER_LITERAL,
   FLOAT_LITERAL,
   BOOLEAN_LITERAL,
-
+  SHELL_LITERAL,
   // symbols
-
+  
   PLUS_SYMB,
   MINUS_SYMB,
   EXPONENTIAL_SYMB,
@@ -88,7 +89,7 @@ export enum TokenIdentifiers {
   RIGHT_PARENTHESIS_SYMB,
   LEFT_CURLY_SYMB,
   RIGHT_CURLY_SYMB,
-
+  COLON_SYMB,
   UNARY_INCREMENT,
   UNARY_DECREMENT,
   BINARY_EQUALITY,

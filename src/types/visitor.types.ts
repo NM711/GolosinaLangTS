@@ -25,6 +25,7 @@ namespace VisitorTypes {
     public abstract visitExportStmnt(node: SyntaxTree.ExportStatementNode): T;
     public abstract visitImportStmnt(node: SyntaxTree.ImportStatementNode): T;
     public abstract visitVarDecStmnt(node: SyntaxTree.VariableDeclarationStatementNode): T;
+    public abstract visitShellExpr(node: SyntaxTree.ShellExpressionNode): T;
   };
 
   /**

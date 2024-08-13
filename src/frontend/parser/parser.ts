@@ -186,6 +186,20 @@ class Parser {
     };
   };
 
+  public parseShellExpr(): SyntaxTree.BaseNodeAST {
+    const node = new SyntaxTree.ShellExpressionNode(this.look.info);
+    this.eat();
+    this.validator.expect.token(TokenIdentifiers.COLON_SYMB, ":", this.look);
+    this.eat();
+
+    this.validator.expect.token(TokenIdentifiers.SHELL_LITERAL, "literal shell expression", this.look);
+
+    node.exec = this.look.lexeme;
+    this.eat();
+
+    return node;
+  };
+
   private parsePrimary(): SyntaxTree.BaseNodeAST {
     const literal = this.parseLiteralExpr();
 

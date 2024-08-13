@@ -8,7 +8,7 @@ import RuntimeValueTypeGuard from "../../guards/runtime_value_guards";
 import TreeNodeTypeGuard from "../../guards/node_gurads";
 import GolosinaExceptions from "../../errors/exceptions";
 import NativeObjects from "../native/native_objects";
-
+import ChildProcess from "node:child_process";
 
 enum DispatchState {
   NONE,
@@ -123,6 +123,23 @@ class ASTEvaluator extends VisitorTypes.AbstractVisitor<RuntimeValues.AbstractVa
     this.environment.declare("fmt", NativeObjects.getFmt);
     this.environment.declare("os", NativeObjects.getOS);
     this.environment.declare("containers", NativeObjects.getContainers);
+  };
+
+  public override visitShellExpr(node: SyntaxTree.ShellExpressionNode): RuntimeValues.AbstractValue {
+    const ps = new Promise((resolve, reject) => {
+      ChildProcess.exec(node.exec, (error, stdout, stderr) => {
+        if (error) {
+          reject(error)
+        } else {
+          resolve(stdout);
+        }
+      });
+    })
+    .then((stdout) => {
+      return this.conversion(stdout);
+    });
+
+    return new RuntimeObjects.NullObject();
   };
 
   public override visitBinaryExpr(node: SyntaxTree.BinaryExpressionNode): RuntimeValues.AbstractValue {
@@ -345,7 +362,7 @@ class ASTEvaluator extends VisitorTypes.AbstractVisitor<RuntimeValues.AbstractVa
     };
 
     this.environment.declare(node.ident.name, variable);
-    
+
     return variable.value;
   };
 
@@ -358,7 +375,7 @@ class ASTEvaluator extends VisitorTypes.AbstractVisitor<RuntimeValues.AbstractVa
     const resolved = node.parent.acceptEvalVisitor(this);
     const golosinaObject = this.tc.checkObject(resolved);
     const accessed = golosinaObject.getMember(node.accessing.name);
-    
+
     if (this.context.updateContext && !RuntimeValueTypeGuard.isNativeMethod(accessed)) {
       this.context.push(golosinaObject);
     };
@@ -367,7 +384,7 @@ class ASTEvaluator extends VisitorTypes.AbstractVisitor<RuntimeValues.AbstractVa
   };
 
   public override visitCallExpr(node: SyntaxTree.ExpressionCallNode): RuntimeValues.AbstractValue {
-    
+
     this.context.updateContext = true;
     const resolved = node.callee.acceptEvalVisitor(this);
     this.context.updateContext = false;
@@ -449,8 +466,8 @@ class ASTEvaluator extends VisitorTypes.AbstractVisitor<RuntimeValues.AbstractVa
 
     node.init.acceptEvalVisitor(this);
 
-    let value: RuntimeValues.AbstractValue = new RuntimeObjects.NullObject(); 
-    
+    let value: RuntimeValues.AbstractValue = new RuntimeObjects.NullObject();
+
     while (true) {
       const expr = node.condition.acceptEvalVisitor(this);
       if (!expr || (RuntimeValueTypeGuard.isObjectValue(expr) && expr && !expr.primitive)) {
@@ -461,7 +478,7 @@ class ASTEvaluator extends VisitorTypes.AbstractVisitor<RuntimeValues.AbstractVa
 
       const state = this.dispatcher.get;
 
-      if (state === DispatchState.RETURN ||state === DispatchState.BREAK) {
+      if (state === DispatchState.RETURN || state === DispatchState.BREAK) {
         break;
       } else {
         node.update.acceptEvalVisitor(this);
@@ -477,7 +494,7 @@ class ASTEvaluator extends VisitorTypes.AbstractVisitor<RuntimeValues.AbstractVa
     this.environment.pushScope(ScopeIdentifier.S_LOOP);
 
     let value: RuntimeValues.AbstractValue = new RuntimeObjects.NullObject();
-    
+
     while (true) {
       const expr = node.condition.acceptEvalVisitor(this);
 
@@ -488,7 +505,7 @@ class ASTEvaluator extends VisitorTypes.AbstractVisitor<RuntimeValues.AbstractVa
       value = node.block.acceptEvalVisitor(this);
 
       const state = this.dispatcher.get;
-      
+
       if (state === DispatchState.RETURN || state === DispatchState.BREAK) {
         break;
       };
@@ -503,11 +520,11 @@ class ASTEvaluator extends VisitorTypes.AbstractVisitor<RuntimeValues.AbstractVa
     this.environment.pushScope(ScopeIdentifier.S_BLOCK);
 
     let value: RuntimeValues.AbstractValue = new RuntimeObjects.NullObject();
-    
+
     for (const stmnt of node.body) {
       value = stmnt.acceptEvalVisitor(this);
       const state = this.dispatcher.get;
-      
+
       if (state === DispatchState.RETURN || state === DispatchState.BREAK) {
         break;
       };
