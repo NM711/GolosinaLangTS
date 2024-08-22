@@ -1,6 +1,6 @@
 import ASTVisitor from "./evaluator";
 import type { SyntaxTree } from "../../frontend/parser/ast";
-import ErrorReporter from "../../errors/reporter";
+import ErrorReporter from "../../util/errors/reporter";
 
 /*
   Im learning the visitor pattern for a clean c++ implementation, so this typescript implementation is but a test run.

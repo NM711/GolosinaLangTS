@@ -1,4 +1,4 @@
-import { RuntimeObjects, RuntimeValues } from "../runtime/core/runtime_values";
+import { RuntimeObjects, RuntimeValues } from "./runtime_values";
 
 /**
   Useful typeguard helpers

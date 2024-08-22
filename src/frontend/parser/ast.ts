@@ -1,4 +1,4 @@
-import { DataType } from "../../common";
+import { DataType } from "../../util/common";
 import { TokenInformation, LineOffset } from "../lexer/token"
 import VisitorTypes from "../../types/visitor.types";
 import { RuntimeValues } from "../../runtime/core/runtime_values";
@@ -23,45 +23,25 @@ export class StatementOffsetTracker {
   };
 };
 
-export enum NodeIdentifiers {
-  N_BINARY_EXPR,
-  N_BINARY_ASSIGN_EXPR,
-  N_UNARY_EXPR,
-  N_DIRECT_MEMBER,
-  N_EXPR_CALL,
-  N_PAREN_EXPR,
-  N_MEMBER_EXPR,
-  N_IF_STMNT,
-  N_FOR_STMNT,
-  N_WHILE_STMNT,
-  N_CASE_TEST,
-  N_CASE_EXPR,
-  N_RETURN_STMNT,
-  N_CLONE_EXPR,
-  N_BREAK_STMNT,
-  N_CONTINUE_STMNT,
-  N_MODULE_STMNT,
-  N_IMPORT_STMNT,
-  N_EXPORT_STMNT,
-  N_IDENT,
-  N_LITERAL,
-  N_METHOD_EXPR,
-  N_VARIABLE,
-  N_DATA_TYPE,
-  N_BLOCK_STMNT,
-  N_ACCESSING,
-  N_SHELL_EXPR
-};
-
 export namespace SyntaxTree {
+  export enum BinaryExpressionType {
+    ASSIGNMENT,
+    LOGICAL_OR,
+    LOGICAL_AND,
+    BITWISE_OR,
+    BITWISE_AND,
+    EQUALITY,
+    RELATIONAL,
+    BITWISE_SHIFT,
+    ADDITIVE,
+    MULTIPLICATIVE,
+  };
 
   export abstract class BaseNodeAST {
-    public id: NodeIdentifiers;
     public kind: string;
     public info: TokenInformation;
 
-    constructor(id: NodeIdentifiers, kind: string, info: TokenInformation) {
-      this.id = id;
+    constructor(kind: string, info: TokenInformation) {
       this.kind = kind;
       this.info = info;
     };
@@ -70,12 +50,14 @@ export namespace SyntaxTree {
   };
 
   export class BinaryExpressionNode extends BaseNodeAST {
+    public type: BinaryExpressionType;
     public lhs: BaseNodeAST;
     public op: string;
     public rhs: BaseNodeAST;
 
-    constructor(kind: string = "BinaryExpression", info: TokenInformation) {
-      super(NodeIdentifiers.N_BINARY_EXPR, kind, info);
+    constructor(type: BinaryExpressionType, info: TokenInformation) {
+      super("BinaryExpression", info);
+      this.type = type;
     };
 
     public override acceptEvalVisitor(visitor: VisitorTypes.TEvaluatorVisitor): RuntimeValues.AbstractValue {
@@ -88,9 +70,9 @@ export namespace SyntaxTree {
     public op: string;
     public isPrefix: boolean;
 
-    constructor(info: TokenInformation) {
-      super(NodeIdentifiers.N_UNARY_EXPR, "UnaryExpression", info);
-      this.isPrefix = false;
+    constructor(prefix: boolean, info: TokenInformation) {
+      super("UnaryExpression", info);
+      this.isPrefix = prefix;
     };
 
     public override acceptEvalVisitor(visitor: VisitorTypes.TEvaluatorVisitor): RuntimeValues.AbstractValue {
@@ -104,7 +86,7 @@ export namespace SyntaxTree {
     public rhs: BaseNodeAST;
 
     constructor(info: TokenInformation) {
-      super(NodeIdentifiers.N_BINARY_ASSIGN_EXPR, "AssignmentExpression", info);
+      super("AssignmentExpression", info);
     };
 
     public override acceptEvalVisitor(visitor: VisitorTypes.TEvaluatorVisitor): RuntimeValues.AbstractValue {
@@ -119,7 +101,7 @@ export namespace SyntaxTree {
     public type: DataType;
 
     constructor(value: string, type: DataType, info: TokenInformation) {
-      super(NodeIdentifiers.N_LITERAL, "Literal", info);
+      super("Literal", info);
       this.value = value;
       this.type = type;
     };
@@ -134,7 +116,7 @@ export namespace SyntaxTree {
     public name: string;
 
     constructor(name: string, info: TokenInformation) {
-      super(NodeIdentifiers.N_IDENT, "Identifier", info);
+      super("Identifier", info);
       this.name = name;
     };
 
@@ -149,7 +131,7 @@ export namespace SyntaxTree {
     public init: BaseNodeAST | null;
 
     constructor(info: TokenInformation) {
-      super(NodeIdentifiers.N_VARIABLE, "Variable", info);
+      super("Variable", info);
       this.isConst = false;
       this.init = null;
     };
@@ -163,7 +145,7 @@ export namespace SyntaxTree {
     public body: BaseNodeAST[];
 
     constructor(info: TokenInformation) {
-      super(NodeIdentifiers.N_BLOCK_STMNT, "BlockStatement", info);
+      super("BlockStatement", info);
       this.body = [];
     };
 
@@ -176,7 +158,7 @@ export namespace SyntaxTree {
     public declaration: BaseNodeAST;
 
     constructor(info: TokenInformation) {
-      super(NodeIdentifiers.N_EXPORT_STMNT, "ExportStatement", info);
+      super("ExportStatement", info);
     };
 
     public override acceptEvalVisitor(visitor: VisitorTypes.TEvaluatorVisitor): RuntimeValues.AbstractValue {
@@ -188,7 +170,7 @@ export namespace SyntaxTree {
     public path: string;
 
     constructor(info: TokenInformation) {
-      super(NodeIdentifiers.N_IMPORT_STMNT, "ImportStatement", info);
+      super("ImportStatement", info);
     };
 
     public override acceptEvalVisitor(visitor: VisitorTypes.TEvaluatorVisitor): RuntimeValues.AbstractValue {
@@ -202,7 +184,7 @@ export namespace SyntaxTree {
     public alternate: BaseNodeAST;
 
     constructor(info: TokenInformation) {
-      super(NodeIdentifiers.N_IF_STMNT, "IfStmnt", info);
+      super("IfStatement", info);
     };
 
     public override acceptEvalVisitor(visitor: VisitorTypes.TEvaluatorVisitor): RuntimeValues.AbstractValue {
@@ -215,7 +197,7 @@ export namespace SyntaxTree {
     public block: BaseNodeAST;
 
     constructor(info: TokenInformation) {
-      super(NodeIdentifiers.N_METHOD_EXPR, "MethodExpression", info);
+      super("MethodExpression", info);
       this.params = [];
     };
 
@@ -225,24 +207,24 @@ export namespace SyntaxTree {
   };
 
 
-  export class ModuleStatemenetNode extends BaseNodeAST {
-    public ident: IdentfierNode;
+  // export class ModuleStatemenetNode extends BaseNodeAST {
+  //   public ident: IdentfierNode;
 
-    constructor(info: TokenInformation) {
-      super(NodeIdentifiers.N_MODULE_STMNT, "ModuleStatement", info);
-    };
+  //   constructor(info: TokenInformation) {
+  //     super("ModuleStatement", info);
+  //   };
 
-    public override acceptEvalVisitor(visitor: VisitorTypes.TEvaluatorVisitor): RuntimeValues.AbstractValue {
-      return visitor.visitModuleStmnt(this);
-    };
-  };
+  //   public override acceptEvalVisitor(visitor: VisitorTypes.TEvaluatorVisitor): RuntimeValues.AbstractValue {
+  //     return visitor.visitModuleStmnt(this);
+  //   };
+  // };
 
   export class MemberExpressionNode extends BaseNodeAST {
     public parent: BaseNodeAST;
     public accessing: IdentfierNode;
 
     constructor(info: TokenInformation) {
-      super(NodeIdentifiers.N_MEMBER_EXPR, "MemberExpression", info);
+      super("MemberExpression", info);
     };
 
     public override acceptEvalVisitor(visitor: VisitorTypes.TEvaluatorVisitor): RuntimeValues.AbstractValue {
@@ -255,7 +237,7 @@ export namespace SyntaxTree {
     public callee: IdentfierNode | MemberExpressionNode;
 
     constructor(info: TokenInformation) {
-      super(NodeIdentifiers.N_EXPR_CALL, "ExpressionCall", info);
+      super("ExpressionCall", info);
       this.arguments = [];
     };
 
@@ -266,20 +248,20 @@ export namespace SyntaxTree {
 
   export class BreakStatementNode extends BaseNodeAST {
     constructor(info: TokenInformation) {
-      super(NodeIdentifiers.N_BREAK_STMNT, "BreakStatement", info);
+      super("BreakStatement", info);
     };
 
-    public override acceptEvalVisitor(visitor: VisitorTypes.TEvaluatorVisitor): RuntimeValues.AbstractValue { 
+    public override acceptEvalVisitor(visitor: VisitorTypes.TEvaluatorVisitor): RuntimeValues.AbstractValue {
       return visitor.visitBreakStmnt(this);
     };
   };
 
   export class ContinueStatementNode extends BaseNodeAST {
     constructor(info: TokenInformation) {
-      super(NodeIdentifiers.N_CONTINUE_STMNT, "ContinueStatement", info);
+      super("ContinueStatement", info);
     };
 
-    public override acceptEvalVisitor(visitor: VisitorTypes.TEvaluatorVisitor): RuntimeValues.AbstractValue { 
+    public override acceptEvalVisitor(visitor: VisitorTypes.TEvaluatorVisitor): RuntimeValues.AbstractValue {
       return visitor.visitContinueStmnt(this);
     };
   };
@@ -288,7 +270,7 @@ export namespace SyntaxTree {
     public expr: BaseNodeAST;
 
     constructor(info: TokenInformation) {
-      super(NodeIdentifiers.N_RETURN_STMNT, "ReturnStatement", info);
+      super("ReturnStatement", info);
     };
 
     public override acceptEvalVisitor(visitor: VisitorTypes.TEvaluatorVisitor): RuntimeValues.AbstractValue {
@@ -296,12 +278,12 @@ export namespace SyntaxTree {
     };
   };
 
-  export class DirectMemberNode extends BaseNodeAST {
+  export class DirectMemberExpressionNode extends BaseNodeAST {
     public key: IdentfierNode;
     public value: BaseNodeAST;
 
     constructor(info: TokenInformation) {
-      super(NodeIdentifiers.N_DIRECT_MEMBER, "DirectMember", info);
+      super("DirectMemberExpression", info);
     };
 
     public override acceptEvalVisitor(visitor: VisitorTypes.TEvaluatorVisitor): RuntimeValues.AbstractValue { };
@@ -309,10 +291,10 @@ export namespace SyntaxTree {
 
   export class CloneExpressionNode extends BaseNodeAST {
     public cloning: IdentfierNode | MemberExpressionNode;
-    public members: DirectMemberNode[];
+    public members: DirectMemberExpressionNode[];
 
     constructor(info: TokenInformation) {
-      super(NodeIdentifiers.N_CLONE_EXPR, "CloneExpression", info);
+      super("CloneExpression", info);
       this.members = [];
     };
 
@@ -328,7 +310,7 @@ export namespace SyntaxTree {
     public block: BaseNodeAST;
 
     constructor(info: TokenInformation) {
-      super(NodeIdentifiers.N_FOR_STMNT, "ForStatement", info);
+      super("ForStatement", info);
     };
 
     public override acceptEvalVisitor(visitor: VisitorTypes.TEvaluatorVisitor): RuntimeValues.AbstractValue {
@@ -341,7 +323,7 @@ export namespace SyntaxTree {
     public block: BaseNodeAST;
 
     constructor(info: TokenInformation) {
-      super(NodeIdentifiers.N_WHILE_STMNT, "WhileStatement", info);
+      super("WhileStatement", info);
     };
 
     public override acceptEvalVisitor(visitor: VisitorTypes.TEvaluatorVisitor): RuntimeValues.AbstractValue {
@@ -352,10 +334,10 @@ export namespace SyntaxTree {
   export class CaseExpressionTestNode extends BaseNodeAST {
     public isDefault: boolean;
     public condition: BaseNodeAST | null;
-    public block: BaseNodeAST;
+    public consequent: BaseNodeAST;
 
     constructor(info: TokenInformation) {
-      super(NodeIdentifiers.N_CASE_TEST, "CaseTest", info);
+      super("CaseExpressionTest", info);
       this.isDefault = false;
       this.condition = null;
     };
@@ -368,10 +350,10 @@ export namespace SyntaxTree {
     public tests: CaseExpressionTestNode[];
 
     constructor(info: TokenInformation) {
-      super(NodeIdentifiers.N_CASE_EXPR, "CaseExpression", info);
+      super("CaseExpression", info);
       this.tests = [];
     };
-    
+
     public override acceptEvalVisitor(visitor: VisitorTypes.TEvaluatorVisitor): RuntimeValues.AbstractValue {
       return visitor.visitCaseExpr(this);
     };
@@ -381,13 +363,13 @@ export namespace SyntaxTree {
   export class ShellExpressionNode extends BaseNodeAST {
     public exec: string;
     constructor(info: TokenInformation) {
-      super(NodeIdentifiers.N_SHELL_EXPR, "ShellExpression", info);  
+      super("ShellExpression", info);
     };
 
     public override acceptEvalVisitor(visitor: VisitorTypes.TEvaluatorVisitor): RuntimeValues.AbstractValue {
-      return visitor.visitShellExpr(this);  
+      return visitor.visitShellExpr(this);
     };
   };
-  
+
   export type Program = BaseNodeAST[];
 };

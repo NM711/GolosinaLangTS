@@ -1,8 +1,8 @@
-import ReporterMetaData from "../../errors/reporter_meta_data";
-import GolosinaExceptions from "../../errors/exceptions";
+import ReporterMetaData from "../../util/errors/reporter_meta_data";
+import GolosinaExceptions from "../../util/errors/exceptions";
 import { InfoUpdateType, LexerState, TokenIdentifiers } from "../../types/token.types";
 import { LinePosition, TokenInformation, Token } from "./token";
-import ErrorReporter from "../../errors/reporter";
+import ErrorReporter from "../../util/errors/reporter";
 
 class Lexer {
   private table: Map<string, TokenIdentifiers>;
@@ -343,11 +343,11 @@ class Lexer {
             switch (this.look) {
               case "=":
                 this.consume();
-                this.pushToken(TokenIdentifiers.BINARY_EQUALITY);
+                this.pushToken(TokenIdentifiers.DOUBLE_EQ_SYMB);
                 break;
 
               default:
-                this.pushToken(TokenIdentifiers.EQUAL_SYMB);
+                this.pushToken(TokenIdentifiers.EQ_SYMB);
             };
             break;
           };
@@ -356,7 +356,7 @@ class Lexer {
             switch (this.look) {
               case "+":
                 this.consume();
-                this.pushToken(TokenIdentifiers.UNARY_INCREMENT);
+                this.pushToken(TokenIdentifiers.DOUBLE_PLUS_SYMB);
                 break;
 
               case "=":
@@ -374,7 +374,7 @@ class Lexer {
             switch (this.look) {
               case "-":
                 this.consume();
-                this.pushToken(TokenIdentifiers.UNARY_DECREMENT);
+                this.pushToken(TokenIdentifiers.DOUBLE_MINUS_SYMB);
                 break;
 
               case ">":
@@ -444,6 +444,11 @@ class Lexer {
                 this.pushToken(TokenIdentifiers.LEFT_ANGLE_BRACKET_EQ_SYMB);
                 break;
 
+              case "<":
+                this.consume();
+                this.pushToken(TokenIdentifiers.DOUBLE_LEFT_ANGLE_BRACKET_SYMB);
+                break;
+
               default:
                 this.pushToken(TokenIdentifiers.LEFT_ANGLE_BRACKET_SYMB);
             };
@@ -456,9 +461,13 @@ class Lexer {
                 this.consume();
                 this.pushToken(TokenIdentifiers.RIGHT_ANGLE_BRACKET_EQ_SYMB);
                 break;
+              case ">":
+                this.consume();
+                this.pushToken(TokenIdentifiers.DOUBLE_RIGHT_ANGLE_BRACKET_SYMB);
+                break;
 
               default:
-                this.pushToken(TokenIdentifiers.RIGHT_ANGLE_BRACKER_SYMB);
+                this.pushToken(TokenIdentifiers.RIGHT_ANGLE_BRACKET_SYMB);
             };
             break;
           };
@@ -467,7 +476,7 @@ class Lexer {
             switch (this.look) {
               case "&":
                 this.consume();
-                this.pushToken(TokenIdentifiers.BINARY_AND);
+                this.pushToken(TokenIdentifiers.DOUBLE_AMPERSAND_SYMB);
                 break;
 
               default:
@@ -480,7 +489,7 @@ class Lexer {
             switch (this.look) {
               case "|":
                 this.consume();
-                this.pushToken(TokenIdentifiers.BINARY_OR);
+                this.pushToken(TokenIdentifiers.DOUBLE_PIPE_SYMB);
                 break;
 
               default:
@@ -504,27 +513,27 @@ class Lexer {
             break;
           };
 
-          case LexerState.S_SHELL: {
-            switch (this.look) {
-              case ";":
-                this.consume();
-                this.pushToken(TokenIdentifiers.SHELL_LITERAL);
-              break;
+          // case LexerState.S_SHELL: {
+          //   switch (this.look) {
+          //     case ";":
+          //       this.consume();
+          //       this.pushToken(TokenIdentifiers.SHELL_LITERAL);
+          //     break;
 
-              default:
-                this.consume();
-            };
-            break;
-          };
+          //     default:
+          //       this.consume();
+          //   };
+          //   break;
+          // };
 
           case LexerState.S_EXCLAMATION: {
             switch (this.look) {
               case "=":
-                this.pushToken(TokenIdentifiers.BINARY_INEQUALITY);
+                this.pushToken(TokenIdentifiers.EXCLAMATION_EQ_SYMB);
                 break;
 
               default:
-                this.pushToken(TokenIdentifiers.EXCLMATION_SYMB);
+                this.pushToken(TokenIdentifiers.EXCLAMATION_SYMB);
             };
           };
         };

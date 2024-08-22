@@ -1,6 +1,6 @@
 import GolosinaExceptions from "./exceptions";
 import fs from "node:fs"
-import { TokenInformation } from "../frontend/lexer/token";
+import { TokenInformation } from "../../frontend/lexer/token";
 import ReporterMetaData from "./reporter_meta_data";
 import { styleText } from "node:util";
 

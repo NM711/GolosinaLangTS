@@ -1,5 +1,5 @@
-import { DataType } from "../../common";
-import GolosinaExceptions from "../../errors/exceptions";
+import { DataType } from "../../util/common";
+import GolosinaExceptions from "../../util/errors/exceptions";
 import type { SyntaxTree } from "../../frontend/parser/ast"
 
 export namespace RuntimeValues {

@@ -21,11 +21,7 @@ namespace VisitorTypes {
     public abstract visitCallExpr(node: SyntaxTree.ExpressionCallNode): T;
     public abstract visitCloneExpr(node: SyntaxTree.CloneExpressionNode): T;
     public abstract visitMemberExpr(node: SyntaxTree.MemberExpressionNode): T;
-    public abstract visitModuleStmnt(node: SyntaxTree.ModuleStatemenetNode): T;
-    public abstract visitExportStmnt(node: SyntaxTree.ExportStatementNode): T;
-    public abstract visitImportStmnt(node: SyntaxTree.ImportStatementNode): T;
     public abstract visitVarDecStmnt(node: SyntaxTree.VariableDeclarationStatementNode): T;
-    public abstract visitShellExpr(node: SyntaxTree.ShellExpressionNode): T;
   };
 
   /**

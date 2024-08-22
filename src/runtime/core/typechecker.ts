@@ -1,7 +1,6 @@
-import GolosinaExceptions from "../../errors/exceptions";
-import { TokenInformation } from "../../frontend/lexer/token";
+import GolosinaExceptions from "../../util/errors/exceptions";
 import { RuntimeObjects, RuntimeValues } from "./runtime_values";
-import RuntimeValueTypeGuard from "../../guards/runtime_value_guards";
+import RuntimeValueTypeGuard from "./runtime_value_guards"
 
 /**
   The runtime typecheker.

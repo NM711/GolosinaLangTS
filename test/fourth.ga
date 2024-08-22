@@ -1,5 +1,3 @@
-module main;
-
 const GetRandomNumber = clone Object {
 	myVector = containers->vector(10, 3, 4),
 	generate = method () {
@@ -10,18 +8,10 @@ const GetRandomNumber = clone Object {
 
 const Selector = clone Object {
 	execute = method () {
-		const message = case (GetRandomNumber->generate()) {
-			of 10 {
-				return "We reached 10!";				
-			}
-
-			of 3 {
-				return "We reached 3!";
-			}
-
-			default {
-				return "We reached default!";
-			}
+		const message = case GetRandomNumber->generate() {
+			of 10 -> "We reached 10!"				
+			of 3 ->  "We reached 3!"
+			default -> "We reached default!"
 		};
 
 		const hello = "hello world";

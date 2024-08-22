@@ -1,5 +1,5 @@
-import { EnvironmentErrorState } from "../runtime/core/environment";
-import { TokenInformation } from "../frontend/lexer/token";
+import { EnvironmentErrorState } from "../../runtime/core/environment";
+import { TokenInformation } from "../../frontend/lexer/token";
 
 namespace GolosinaExceptions {
   export namespace Backend {

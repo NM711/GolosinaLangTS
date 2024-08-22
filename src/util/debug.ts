@@ -1,5 +1,5 @@
-import { Token } from "./frontend/lexer/token";
-import type { SyntaxTree } from "./frontend/parser/ast";
+import { Token } from "../frontend/lexer/token";
+import type { SyntaxTree } from "../frontend/parser/ast";
 
 class GolosinaDebug {
   public logTokens(tokens: Token[]): void {

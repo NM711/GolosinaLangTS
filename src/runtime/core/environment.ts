@@ -1,5 +1,4 @@
-import GolosinaExceptions from "../../errors/exceptions";
-import RuntimeValueTypeGuard from "../../guards/runtime_value_guards";
+import GolosinaExceptions from "../../util/errors/exceptions";
 import { RuntimeValues } from "./runtime_values";
 
 export enum ScopeIdentifier {

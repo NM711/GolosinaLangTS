@@ -1,4 +1,3 @@
-module main;
 # Expression Examples
 
 const x = clone Object {

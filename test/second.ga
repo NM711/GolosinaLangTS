@@ -1,5 +1,3 @@
-module main;
-
 const Volumes = clone Object {
 	# Prism Volume Formula V = Bh
 	prism = method (r, h) {

@@ -1,6 +1,6 @@
 import fs from "node:fs"
 import { RuntimeObjects, RuntimeValues } from "../core/runtime_values";
-import RuntimeValueTypeGuard from "../../guards/runtime_value_guards";
+import RuntimeValueTypeGuard from "../core/runtime_value_guards";
 
 namespace NativeModules {
 

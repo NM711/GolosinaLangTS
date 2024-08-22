@@ -1,12 +1,11 @@
 import VisitorTypes from "../../types/visitor.types";
 import { SyntaxTree } from "../../frontend/parser/ast";
 import { RuntimeObjects, RuntimeValues } from "./runtime_values";
-import { DataType } from "../../common";
+import { DataType } from "../../util/common";
 import GolosinaTypeChecker from "./typechecker";
 import Environment, { ScopeIdentifier } from "./environment";
-import RuntimeValueTypeGuard from "../../guards/runtime_value_guards";
-import TreeNodeTypeGuard from "../../guards/node_gurads";
-import GolosinaExceptions from "../../errors/exceptions";
+import RuntimeValueTypeGuard from "./runtime_value_guards";
+import GolosinaExceptions from "../../util/errors/exceptions";
 import NativeObjects from "../native/native_objects";
 import ChildProcess from "node:child_process";
 
@@ -123,23 +122,6 @@ class ASTEvaluator extends VisitorTypes.AbstractVisitor<RuntimeValues.AbstractVa
     this.environment.declare("fmt", NativeObjects.getFmt);
     this.environment.declare("os", NativeObjects.getOS);
     this.environment.declare("containers", NativeObjects.getContainers);
-  };
-
-  public override visitShellExpr(node: SyntaxTree.ShellExpressionNode): RuntimeValues.AbstractValue {
-    const ps = new Promise((resolve, reject) => {
-      ChildProcess.exec(node.exec, (error, stdout, stderr) => {
-        if (error) {
-          reject(error)
-        } else {
-          resolve(stdout);
-        }
-      });
-    })
-    .then((stdout) => {
-      return this.conversion(stdout);
-    });
-
-    return new RuntimeObjects.NullObject();
   };
 
   public override visitBinaryExpr(node: SyntaxTree.BinaryExpressionNode): RuntimeValues.AbstractValue {
@@ -297,8 +279,9 @@ class ASTEvaluator extends VisitorTypes.AbstractVisitor<RuntimeValues.AbstractVa
   public override visitAssignmentExpr(node: SyntaxTree.AssignmentExpressionNode): RuntimeValues.AbstractValue {
     let ident: SyntaxTree.IdentfierNode;
 
-    if (TreeNodeTypeGuard.isIdent(node.lhs)) {
+    if (node.lhs instanceof SyntaxTree.IdentfierNode) {
       ident = node.lhs;
+
     } else {
       ident = node.lhs.accessing;
     };
@@ -342,13 +325,6 @@ class ASTEvaluator extends VisitorTypes.AbstractVisitor<RuntimeValues.AbstractVa
     };
 
     return golosinaCustomObject;
-  };
-
-  public override visitModuleStmnt(node: SyntaxTree.ModuleStatemenetNode): RuntimeValues.AbstractValue {
-    const golosinaModule = new RuntimeValues.Module();
-    this.environment.declare(node.ident.name, golosinaModule);
-    this.environment.lastResolvedModuleSymbol = node.ident.name;
-    return golosinaModule;
   };
 
   public override visitVarDecStmnt(node: SyntaxTree.VariableDeclarationStatementNode): RuntimeValues.AbstractValue {
@@ -553,12 +529,12 @@ class ASTEvaluator extends VisitorTypes.AbstractVisitor<RuntimeValues.AbstractVa
         };
 
         if (expr.primitive === discriminant.primitive) {
-          value = test.block.acceptEvalVisitor(this);
+          value = test.consequent.acceptEvalVisitor(this);
           break;
         };
 
       } else {
-        value = test.block.acceptEvalVisitor(this);
+        value = test.consequent.acceptEvalVisitor(this);
       };
 
       const state = this.dispatcher.get;

@@ -1,5 +1,5 @@
 import Interpreter from "./src/interpreter";
-import Debug from "./src/debug"
+import Debug from "./src/util/debug"
 import process from "node:process";
 
 class GolosinaCommandLineInterface {

@@ -1,5 +1,3 @@
-module main;
-
 const CleanerUtils = clone Object {
 	concatFile = method (base, fileName) {
 		return base + "/" + fileName;
