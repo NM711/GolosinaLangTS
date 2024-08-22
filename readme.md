@@ -1,3 +1,7 @@
+
+
+https://github.com/user-attachments/assets/3b61a5e5-dd91-456d-bb43-2eceebff9824
+
 # GolosinaLang
 
 #### NOTE:
